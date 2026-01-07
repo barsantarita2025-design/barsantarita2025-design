@@ -4,7 +4,7 @@ import { STORAGE_KEYS, DEFAULT_ADMIN, DEFAULT_PRODUCTS } from '../constants';
 /**
  * NOTE: This service interacts with the backend API.
  */
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 const fetchAPI = async (endpoint: string, options?: RequestInit) => {
   try {

@@ -9,6 +9,9 @@ const app = express();
 const prisma = new PrismaClient();
 const PORT = process.env.PORT || 3001;
 
+// Exportar app para serverless
+export { app, prisma };
+
 app.use(cors());
 app.use(express.json());
 
@@ -292,7 +295,11 @@ app.post('/api/pos/sales', async (req, res) => {
   }
 });
 
-// --- Start Server ---
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
-});
+// --- Start Server (Solo en desarrollo local) ---
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
+  });
+}
+
+export default app;
