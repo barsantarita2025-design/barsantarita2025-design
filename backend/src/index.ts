@@ -20,7 +20,30 @@ const PORT = process.env.PORT || 3001;
 export { app, prisma };
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
+
+// Utility to parse body in serverless environments where it might arrive as Buffer
+const parseBody = (body: any) => {
+  if (!body) return {};
+  if (Buffer.isBuffer(body)) {
+    try {
+      return JSON.parse(body.toString('utf8'));
+    } catch (e) {
+      console.error('Error parsing Buffer body:', e);
+      return {};
+    }
+  }
+  if (typeof body === 'string') {
+    try {
+      return JSON.parse(body);
+    } catch (e) {
+      console.error('Error parsing string body:', e);
+      return {};
+    }
+  }
+  return body;
+};
 
 // --- Health Check ---
 app.get('/api/health', (req, res) => {
@@ -39,7 +62,8 @@ app.get('/api/users', async (req, res) => {
 
 app.post('/api/users', async (req, res) => {
   try {
-    const user = await prisma.user.create({ data: req.body });
+    const data = parseBody(req.body);
+    const user = await prisma.user.create({ data });
     res.json(user);
   } catch (error) {
     res.status(500).json({ error: 'Error creating user' });
@@ -60,13 +84,14 @@ app.get('/api/products', async (req, res) => {
 
 app.post('/api/products', async (req, res) => {
   try {
-    console.log('POST /api/products - Body:', JSON.stringify(req.body));
+    const body = parseBody(req.body);
+    console.log('POST /api/products - Parsed Body:', JSON.stringify(body));
 
-    if (!req.body || Object.keys(req.body).length === 0) {
+    if (!body || Object.keys(body).length === 0) {
       return res.status(400).json({ error: 'Body is empty or invalid' });
     }
 
-    const product = await prisma.product.create({ data: req.body });
+    const product = await prisma.product.create({ data: body });
     console.log('Product created successfully:', product.id);
     res.json(product);
   } catch (error) {
@@ -81,9 +106,10 @@ app.post('/api/products', async (req, res) => {
 
 app.put('/api/products/:id', async (req, res) => {
   try {
+    const data = parseBody(req.body);
     const product = await prisma.product.update({
       where: { id: req.params.id },
-      data: req.body
+      data
     });
     res.json(product);
   } catch (error) {
@@ -125,9 +151,10 @@ app.get('/api/sessions/active', async (req, res) => {
 
 app.post('/api/sessions', async (req, res) => {
   try {
+    const data = parseBody(req.body);
     const session = await prisma.shiftSession.create({
       data: {
-        ...req.body,
+        ...data,
         status: 'OPEN',
         openedAt: new Date()
       }
@@ -140,10 +167,11 @@ app.post('/api/sessions', async (req, res) => {
 
 app.post('/api/sessions/:id/close', async (req, res) => {
   try {
+    const data = parseBody(req.body);
     const session = await prisma.shiftSession.update({
       where: { id: req.params.id },
       data: {
-        ...req.body,
+        ...data,
         status: 'CLOSED',
         closedAt: new Date()
       }
@@ -166,7 +194,8 @@ app.get('/api/credit/customers', async (req, res) => {
 
 app.post('/api/credit/customers', async (req, res) => {
   try {
-    const customer = await prisma.creditCustomer.create({ data: req.body });
+    const data = parseBody(req.body);
+    const customer = await prisma.creditCustomer.create({ data });
     res.json(customer);
   } catch (error) {
     res.status(500).json({ error: 'Error creating credit customer' });
@@ -187,7 +216,8 @@ app.get('/api/credit/customers/:id/history', async (req, res) => {
 
 app.post('/api/credit/customers/:id/transactions', async (req, res) => {
   try {
-    const { amount, type, ...data } = req.body;
+    const body = parseBody(req.body);
+    const { amount, type, ...data } = body;
     const transaction = await prisma.$transaction(async (tx) => {
       const t = await tx.creditTransaction.create({
         data: {
@@ -226,7 +256,8 @@ app.get('/api/accounting/expenses', async (req, res) => {
 
 app.post('/api/accounting/expenses', async (req, res) => {
   try {
-    const expense = await prisma.fixedExpense.create({ data: req.body });
+    const data = parseBody(req.body);
+    const expense = await prisma.fixedExpense.create({ data });
     res.json(expense);
   } catch (error) {
     res.status(500).json({ error: 'Error creating expense' });
@@ -268,9 +299,10 @@ app.get('/api/config', async (req, res) => {
 
 app.patch('/api/config', async (req, res) => {
   try {
+    const data = parseBody(req.body);
     const config = await prisma.appConfig.update({
       where: { id: 'default' },
-      data: req.body
+      data
     });
     res.json(config);
   } catch (error) {
@@ -299,7 +331,8 @@ app.get('/api/pos/sales', async (req, res) => {
 
 app.post('/api/pos/sales', async (req, res) => {
   try {
-    const { items, payments, ...saleData } = req.body;
+    const body = parseBody(req.body);
+    const { items, payments, ...saleData } = body;
     const sale = await prisma.pOSSale.create({
       data: {
         ...saleData,
