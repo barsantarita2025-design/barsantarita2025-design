@@ -6,7 +6,14 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const app = express();
-const prisma = new PrismaClient();
+
+// --- Prisma Singleton para Serverless ---
+const globalForPrisma = global as unknown as { prisma: PrismaClient };
+const prisma = globalForPrisma.prisma || new PrismaClient({
+  log: ['error', 'warn'],
+});
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+
 const PORT = process.env.PORT || 3001;
 
 // Exportar app para serverless
@@ -53,10 +60,22 @@ app.get('/api/products', async (req, res) => {
 
 app.post('/api/products', async (req, res) => {
   try {
+    console.log('POST /api/products - Body:', JSON.stringify(req.body));
+
+    if (!req.body || Object.keys(req.body).length === 0) {
+      return res.status(400).json({ error: 'Body is empty or invalid' });
+    }
+
     const product = await prisma.product.create({ data: req.body });
+    console.log('Product created successfully:', product.id);
     res.json(product);
   } catch (error) {
-    res.status(500).json({ error: 'Error creating product' });
+    console.error('CRITICAL ERROR in POST /api/products:', error);
+    res.status(500).json({
+      error: 'Error creating product',
+      details: error instanceof Error ? error.message : String(error),
+      stack: process.env.NODE_ENV !== 'production' ? (error instanceof Error ? error.stack : undefined) : undefined
+    });
   }
 });
 
@@ -293,6 +312,16 @@ app.post('/api/pos/sales', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: 'Error creating sale' });
   }
+});
+
+// --- Global Error Handler ---
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('UNHANDLED ERROR:', err);
+  res.status(500).json({
+    error: 'Internal Server Error',
+    message: err.message,
+    stack: process.env.NODE_ENV !== 'production' ? err.stack : undefined
+  });
 });
 
 // --- Start Server (Solo en desarrollo local) ---
