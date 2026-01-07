@@ -12,19 +12,23 @@
     "backend:push": "cd backend && npm run prisma:push"
   },
   "dependencies": {
+    "@prisma/client": "^6.2.1",
+    "cors": "^2.8.5",
+    "express": "^5.2.1",
+    "lucide-react": "0.363.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "react-router-dom": "6.22.3",
     "recharts": "2.12.0",
-    "lucide-react": "0.363.0",
-    "serverless-http": "^3.2.0",
-    "@prisma/client": "^6.2.1"
+    "serverless-http": "^3.2.0"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "prisma": "^6.2.1",
     "typescript": "~5.8.2",
-    "vite": "^6.2.0",
-    "prisma": "^6.2.1"
+    "vite": "^6.2.0"
   }
 }
