@@ -1,0 +1,28 @@
+ERROR: 
+Invalid `prisma.user.findMany()` invocation in
+C:\Users\Dubier Medina\Desktop\DAM\Desarrollos\barflow---sistema-de-contabilidad\backend\debug-prisma.ts:10:27
+
+   7 
+   8 async function check() {
+   9     try {
+→ 10         await prisma.user.findMany(
+Can't reach database server at `ep-bold-hall-ahuj46tk-pooler.c-3.us-east-1.aws.neon.tech:5432`
+
+Please make sure your database server is running at `ep-bold-hall-ahuj46tk-pooler.c-3.us-east-1.aws.neon.tech:5432`.
+CODE: undefined
+STACK: PrismaClientInitializationError: 
+Invalid `prisma.user.findMany()` invocation in
+C:\Users\Dubier Medina\Desktop\DAM\Desarrollos\barflow---sistema-de-contabilidad\backend\debug-prisma.ts:10:27
+
+   7 
+   8 async function check() {
+   9     try {
+→ 10         await prisma.user.findMany(
+Can't reach database server at `ep-bold-hall-ahuj46tk-pooler.c-3.us-east-1.aws.neon.tech:5432`
+
+Please make sure your database server is running at `ep-bold-hall-ahuj46tk-pooler.c-3.us-east-1.aws.neon.tech:5432`.
+    at Vn.handleRequestError (C:\Users\Dubier Medina\Desktop\DAM\Desarrollos\barflow---sistema-de-contabilidad\backend\node_modules\@prisma\client\runtime\library.js:121:7640)
+    at Vn.handleAndLogRequestError (C:\Users\Dubier Medina\Desktop\DAM\Desarrollos\barflow---sistema-de-contabilidad\backend\node_modules\@prisma\client\runtime\library.js:121:6663)
+    at Vn.request (C:\Users\Dubier Medina\Desktop\DAM\Desarrollos\barflow---sistema-de-contabilidad\backend\node_modules\@prisma\client\runtime\library.js:121:6370)
+    at async l (C:\Users\Dubier Medina\Desktop\DAM\Desarrollos\barflow---sistema-de-contabilidad\backend\node_modules\@prisma\client\runtime\library.js:130:9617)
+    at async check (C:\Users\Dubier Medina\Desktop\DAM\Desarrollos\barflow---sistema-de-contabilidad\backend\debug-prisma.ts:10:9)

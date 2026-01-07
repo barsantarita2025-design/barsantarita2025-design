@@ -1,0 +1,205 @@
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "library"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String              @id @default(uuid())
+  username           String              @unique
+  name               String
+  role               Role                @default(EMPLOYEE)
+  password           String
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  creditTransactions CreditTransaction[]
+  acknowledgedAlerts DrawerAlert[]       @relation("AcknowledgedBy")
+  drawerAlerts       DrawerAlert[]
+  drawerLogs         DrawerLog[]
+  closedSessions     ShiftSession[]      @relation("ClosedBy")
+  openedSessions     ShiftSession[]      @relation("OpenedBy")
+  workShifts         WorkShift[]
+}
+
+model Product {
+  id           String        @id @default(uuid())
+  name         String
+  category     String
+  costPrice    Float         @default(0)
+  salePrice    Float
+  active       Boolean       @default(true)
+  image        String?
+  quickSale    Boolean       @default(true)
+  displayOrder Int           @default(0)
+  stock        Int?
+  barcode      String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  posSaleItems POSSaleItem[]
+}
+
+model ShiftSession {
+  id                 String    @id @default(uuid())
+  openedBy           String
+  closedBy           String?
+  openedAt           DateTime  @default(now())
+  closedAt           DateTime?
+  status             String    @default("OPEN")
+  initialInventory   Json
+  finalInventory     Json?
+  salesReport        Json?
+  closingObservation String?
+  realCash           Float?
+  auditLog           Json?
+  closer             User?     @relation("ClosedBy", fields: [closedBy], references: [id])
+  opener             User      @relation("OpenedBy", fields: [openedBy], references: [id])
+}
+
+model CreditCustomer {
+  id           String              @id @default(uuid())
+  name         String
+  documentId   String?
+  phone        String?
+  maxLimit     Float
+  currentUsed  Float               @default(0)
+  observations String?
+  active       Boolean             @default(true)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  transactions CreditTransaction[]
+}
+
+model CreditTransaction {
+  id            String         @id @default(uuid())
+  customerId    String
+  employeeId    String
+  employeeName  String
+  amount        Float
+  date          DateTime       @default(now())
+  type          String
+  paymentMethod String?
+  observation   String
+  customer      CreditCustomer @relation(fields: [customerId], references: [id])
+  employee      User           @relation(fields: [employeeId], references: [id])
+}
+
+model FixedExpense {
+  id         String @id @default(uuid())
+  name       String
+  amount     Float
+  paymentDay String
+  type       String
+}
+
+model WorkShift {
+  id              String    @id @default(uuid())
+  employeeId      String
+  employeeName    String
+  date            DateTime
+  startTime       String
+  endTime         String
+  hoursWorked     Float
+  hourlyRate      Float
+  surcharges      Float
+  totalPay        Float
+  status          String    @default("PENDING")
+  rejectionReason String?
+  approvedBy      String?
+  approvedAt      DateTime?
+  employee        User      @relation(fields: [employeeId], references: [id])
+}
+
+model Purchase {
+  id           String   @id @default(uuid())
+  date         DateTime @default(now())
+  productName  String
+  quantity     Int
+  unitCost     Float
+  totalCost    Float
+  observations String?
+}
+
+model POSSale {
+  id            String        @id @default(uuid())
+  sessionId     String?
+  employeeId    String
+  employeeName  String
+  subtotal      Float
+  tax           Float
+  tip           Float
+  total         Float
+  paymentMethod String
+  cashReceived  Float?
+  change        Float?
+  createdAt     DateTime      @default(now())
+  drawerOpened  Boolean       @default(true)
+  notes         String?
+  payments      POSPayment[]
+  items         POSSaleItem[]
+}
+
+model POSSaleItem {
+  id          String  @id @default(uuid())
+  saleId      String
+  productId   String
+  productName String
+  quantity    Int
+  unitPrice   Float
+  subtotal    Float
+  costPrice   Float?
+  product     Product @relation(fields: [productId], references: [id])
+  sale        POSSale @relation(fields: [saleId], references: [id])
+}
+
+model POSPayment {
+  id     String  @id @default(uuid())
+  saleId String
+  method String
+  amount Float
+  sale   POSSale @relation(fields: [saleId], references: [id])
+}
+
+model DrawerLog {
+  id           String   @id @default(uuid())
+  date         DateTime @default(now())
+  eventType    String
+  status       String   @default("CLOSED")
+  userId       String?
+  userName     String?
+  durationMs   Int      @default(0)
+  isAuthorized Boolean  @default(true)
+  notes        String?
+  saleId       String?
+  user         User?    @relation(fields: [userId], references: [id])
+}
+
+model DrawerAlert {
+  id             String    @id @default(uuid())
+  date           DateTime  @default(now())
+  type           String
+  severity       String
+  message        String
+  userId         String?
+  acknowledged   Boolean   @default(false)
+  acknowledgedBy String?
+  acknowledgedAt DateTime?
+  admin          User?     @relation("AcknowledgedBy", fields: [acknowledgedBy], references: [id])
+  user           User?     @relation(fields: [userId], references: [id])
+}
+
+model AppConfig {
+  id                String  @id @default("default")
+  barName           String  @default("Bar Flow")
+  lastExportDate    String
+  cashDrawerEnabled Boolean @default(false)
+  cashDrawerPort    String  @default("COM1")
+}
+
+enum Role {
+  ADMIN
+  EMPLOYEE
+}

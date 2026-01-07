@@ -1,0 +1,48 @@
+:root {
+  /* Dark Theme (Default) */
+  --bg-900: #0f172a;
+  --bg-800: #1e293b;
+  --bg-700: #334155;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --accent: #f59e0b;
+  --accent-hover: #fbbf24;
+  --border: #1e293b;
+}
+
+[data-theme='light'] {
+  --bg-900: #f8fafc;
+  --bg-800: #ffffff;
+  --bg-700: #f1f5f9;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --accent: #d97706;
+  --accent-hover: #b45309;
+  --border: #e2e8f0;
+}
+
+body {
+  background-color: var(--bg-900);
+  color: var(--text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+}
+
+/* Custom scrollbar for theme */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-900);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg-700);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}

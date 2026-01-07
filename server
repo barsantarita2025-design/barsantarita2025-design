@@ -1,0 +1,178 @@
+-- =============================================================================
+-- BARFLOW - ESQUEMA DE BASE DE DATOS PARA PUNTO DE VENTA (POS)
+-- =============================================================================
+-- Este esquema está diseñado para usar con localStorage (browser storage)
+-- pero también es compatible con SQLite/PostgreSQL para migraciones futuras
+
+-- =============================================================================
+-- TABLA: PRODUCTOS (Ya existe en el proyecto, extendida para POS)
+-- =============================================================================
+-- CREATE TABLE IF NOT EXISTS products (
+--     id TEXT PRIMARY KEY,
+--     name TEXT NOT NULL,
+--     category TEXT NOT NULL,
+--     costPrice REAL DEFAULT 0,
+--     salePrice REAL NOT NULL,
+--     active INTEGER DEFAULT 1,
+--     quickSale INTEGER DEFAULT 1,  -- Producto visible en pantalla POS
+--     displayOrder INTEGER DEFAULT 0  -- Orden de visualización
+-- );
+
+-- =============================================================================
+-- TABLA: VENTAS (POS SALES)
+-- =============================================================================
+-- CREATE TABLE IF NOT EXISTS pos_sales (
+--     id TEXT PRIMARY KEY,
+--     sessionId TEXT,                          -- Turno asociado
+--     employeeId TEXT NOT NULL,
+--     employeeName TEXT NOT NULL,
+--     subtotal REAL NOT NULL DEFAULT 0,
+--     tax REAL DEFAULT 0,
+--     tip REAL DEFAULT 0,
+--     total REAL NOT NULL,
+--     paymentMethod TEXT NOT NULL,             -- CASH, TRANSFER, CARD, MIXED
+--     cashReceived REAL DEFAULT 0,
+--     change REAL DEFAULT 0,
+--     createdAt TEXT NOT NULL,                 -- ISO 8601 timestamp
+--     drawerOpened INTEGER DEFAULT 1,          -- Si se abrió la gaveta
+--     FOREIGN KEY (employeeId) REFERENCES users(id)
+-- );
+
+-- =============================================================================
+-- TABLA: DETALLE DE VENTAS (SALE ITEMS)
+-- =============================================================================
+-- CREATE TABLE IF NOT EXISTS pos_sale_items (
+--     id TEXT PRIMARY KEY,
+--     saleId TEXT NOT NULL,
+--     productId TEXT NOT NULL,
+--     productName TEXT NOT NULL,
+--     quantity INTEGER NOT NULL,
+--     unitPrice REAL NOT NULL,
+--     subtotal REAL NOT NULL,
+--     FOREIGN KEY (saleId) REFERENCES pos_sales(id),
+--     FOREIGN KEY (productId) REFERENCES products(id)
+-- );
+
+-- =============================================================================
+-- TABLA: PAGOS DE VENTAS (SALE PAYMENTS - para métodos mixtos)
+-- =============================================================================
+-- CREATE TABLE IF NOT EXISTS pos_sale_payments (
+--     id TEXT PRIMARY KEY,
+--     saleId TEXT NOT NULL,
+--     method TEXT NOT NULL,                    -- CASH, TRANSFER, CARD
+--     amount REAL NOT NULL,
+--     FOREIGN KEY (saleId) REFERENCES pos_sales(id)
+-- );
+
+-- =============================================================================
+-- TABLA: LOGS DE GAVETA DE DINERO (CASH DRAWER LOGS)
+-- =============================================================================
+-- CREATE TABLE IF NOT EXISTS drawer_logs (
+--     id TEXT PRIMARY KEY,
+--     date TEXT NOT NULL,                      -- ISO 8601 timestamp
+--     eventType TEXT NOT NULL,                 -- SALE, MANUAL, UNKNOWN
+--     status TEXT DEFAULT 'CLOSED',            -- OPEN, CLOSED, JAMMED
+--     userId TEXT,                             -- Usuario que autorizó (si aplica)
+--     userName TEXT,
+--     durationMs INTEGER DEFAULT 0,            -- Duración de la apertura en ms
+--     isAuthorized INTEGER DEFAULT 1,          -- 1=Autorizado, 0=No autorizado
+--     notes TEXT,
+--     saleId TEXT,                             -- Venta asociada (si aplica)
+--     FOREIGN KEY (userId) REFERENCES users(id),
+--     FOREIGN KEY (saleId) REFERENCES pos_sales(id)
+-- );
+
+-- =============================================================================
+-- TABLA: ALERTAS DE SEGURIDAD (SECURITY ALERTS)
+-- =============================================================================
+-- CREATE TABLE IF NOT EXISTS drawer_alerts (
+--     id TEXT PRIMARY KEY,
+--     date TEXT NOT NULL,                      -- ISO 8601 timestamp
+--     type TEXT NOT NULL,                      -- UNAUTHORIZED_OPEN, LONG_OPEN, JAMMED
+--     severity TEXT NOT NULL,                  -- LOW, MEDIUM, HIGH, CRITICAL
+--     message TEXT NOT NULL,
+--     userId TEXT,                             -- Usuario relacionado (si aplica)
+--     acknowledged INTEGER DEFAULT 0,          -- 0=No, 1=Sí
+--     acknowledgedBy TEXT,                     -- Admin que reconoció la alerta
+--     acknowledgedAt TEXT,                     -- Timestamp de reconocimiento
+--     drawerLogId TEXT,                        -- Log relacionado
+--     FOREIGN KEY (userId) REFERENCES users(id),
+--     FOREIGN KEY (acknowledgedBy) REFERENCES users(id),
+--     FOREIGN KEY (drawerLogId) REFERENCES drawer_logs(id)
+-- );
+
+-- =============================================================================
+-- TABLA: CONFIGURACIÓN DE HARDWARE (HARDWARE CONFIG)
+-- =============================================================================
+-- CREATE TABLE IF NOT EXISTS hardware_config (
+--     id TEXT PRIMARY KEY DEFAULT 'default',
+--     cashDrawerEnabled INTEGER DEFAULT 0,    -- 0=Deshabilitado, 1=Habilitado
+--     cashDrawerPort TEXT DEFAULT '/dev/ttyUSB0',  -- Puerto serial
+--     cashDrawerBaudRate INTEGER DEFAULT 9600,
+--     drawerOpenPulseMs INTEGER DEFAULT 100,  -- Duración del pulso de apertura
+--     drawerSensorEnabled INTEGER DEFAULT 0,  -- Habilitar sensor de estado
+--     drawerSensorPin INTEGER DEFAULT 2,      -- Pin del sensor (para GPIO)
+--     pollingIntervalMs INTEGER DEFAULT 500,  -- Intervalo de polling del sensor
+--     maxDrawerOpenMs INTEGER DEFAULT 5000,   -- Tiempo máximo abierto antes de alerta
+--     updatedAt TEXT NOT NULL
+-- );
+
+-- =============================================================================
+-- ÍNDICES PARA MEJORAR RENDIMIENTO
+-- =============================================================================
+-- CREATE INDEX IF NOT EXISTS idx_pos_sales_date ON pos_sales(createdAt);
+-- CREATE INDEX IF NOT EXISTS idx_pos_sales_employee ON pos_sales(employeeId);
+-- CREATE INDEX IF NOT EXISTS idx_drawer_logs_date ON drawer_logs(date);
+-- CREATE INDEX IF NOT EXISTS idx_drawer_alerts_unack ON drawer_alerts(acknowledged) WHERE acknowledged = 0;
+-- CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
+-- CREATE INDEX IF NOT EXISTS idx_products_quick ON products(quickSale) WHERE quickSale = 1;
+
+-- =============================================================================
+-- DATOS INICIALES DE CONFIGURACIÓN
+-- =============================================================================
+-- INSERT OR REPLACE INTO hardware_config (id, cashDrawerEnabled, cashDrawerPort, cashDrawerBaudRate, drawerOpenPulseMs, drawerSensorEnabled, pollingIntervalMs, maxDrawerOpenMs, updatedAt)
+-- VALUES ('default', 0, '/dev/ttyUSB0', 9600, 100, 0, 500, 5000, datetime('now'));
+
+-- =============================================================================
+-- STORED PROCEDURES (Funciones helper para localStorage)
+-- =============================================================================
+-- Estas funciones simulan stored procedures para el sistema localStorage
+
+-- Generar ID único
+-- function generateId() {
+--     return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).substr(2, 9);
+-- }
+
+-- =============================================================================
+-- EJEMPLO DE CONSULTA PARA REPORTE DE VENTAS DEL DÍA
+-- =============================================================================
+-- SELECT 
+--     DATE(createdAt) as sale_date,
+--     COUNT(*) as total_sales,
+--     SUM(total) as total_revenue,
+--     SUM(CASE WHEN paymentMethod = 'CASH' THEN total ELSE 0 END) as cash_revenue,
+--     SUM(CASE WHEN paymentMethod = 'CARD' THEN total ELSE 0 END) as card_revenue,
+--     SUM(CASE WHEN paymentMethod = 'TRANSFER' THEN total ELSE 0 END) as transfer_revenue,
+--     COUNT(CASE WHEN drawerOpened = 1 END) as drawer_opens
+-- FROM pos_sales
+-- WHERE createdAt >= datetime('now', '-1 day')
+-- GROUP BY DATE(createdAt);
+
+-- =============================================================================
+-- EJEMPLO DE CONSULTA PARA ALERTAS NO RECONOCIDAS
+-- =============================================================================
+-- SELECT * FROM drawer_alerts 
+-- WHERE acknowledged = 0 
+-- ORDER BY date DESC, severity DESC;
+
+-- =============================================================================
+-- EJEMPLO DE CONSULTA PARA LOGS DE GAVETA DEL DÍA
+-- =============================================================================
+-- SELECT 
+--     eventType,
+--     COUNT(*) as count,
+--     SUM(durationMs) as total_open_time_ms,
+--     SUM(CASE WHEN isAuthorized = 0 THEN 1 ELSE 0 END) as unauthorized_opens
+-- FROM drawer_logs
+-- WHERE date >= datetime('now', '-1 day')
+-- GROUP BY eventType;
