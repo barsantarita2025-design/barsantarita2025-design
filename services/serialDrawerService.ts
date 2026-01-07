@@ -6,7 +6,47 @@
 // =============================================================================
 
 import type { HardwareConfig, SerialEvent, SerialEventType } from '../types-pos';
-import { EventEmitter } from 'events';
+
+// -----------------------------------------------------------------------------
+// EVENT EMITTER COMPATIBLE CON NAVEGADOR (Reemplaza a Node.js events)
+// -----------------------------------------------------------------------------
+export class EventEmitter {
+  private listeners: Record<string, Function[]> = {};
+
+  on(event: string, listener: Function): this {
+    if (!this.listeners[event]) {
+      this.listeners[event] = [];
+    }
+    this.listeners[event].push(listener);
+    return this;
+  }
+
+  off(event: string, listener: Function): this {
+    if (!this.listeners[event]) return this;
+    this.listeners[event] = this.listeners[event].filter(l => l !== listener);
+    return this;
+  }
+
+  emit(event: string, ...args: any[]): boolean {
+    if (!this.listeners[event]) return false;
+    this.listeners[event].forEach(listener => listener(...args));
+    return true;
+  }
+
+  removeAllListeners(event?: string): this {
+    if (event) {
+      delete this.listeners[event];
+    } else {
+      this.listeners = {};
+    }
+    return this;
+  }
+
+  // Alias para compatibilidad con Node.js
+  removeListener(event: string, listener: Function): this {
+    return this.off(event, listener);
+  }
+}
 
 // -----------------------------------------------------------------------------
 // INTERFAZ DEL PUERTO SERIAL (ABSTRACCIÓN)
@@ -71,7 +111,7 @@ export class SerialDrawerService extends EventEmitter {
   private isConnected: boolean = false;
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 3;
-  private pollingTimer: NodeJS.Timeout | null = null;
+  private pollingTimer: any = null; // Usar any para evitar NodeJS.Timeout en browser
   private simulationMode: boolean = false;
   private drawerState: 'OPEN' | 'CLOSED' = 'CLOSED';
 
@@ -86,7 +126,8 @@ export class SerialDrawerService extends EventEmitter {
   // -------------------------------------------------------------------------
 
   private detectPlatform(): void {
-    const platform = process.platform;
+    // @ts-ignore - Evitar error de tipos en browser
+    const platform = typeof process !== 'undefined' ? process.platform : 'browser';
 
     if (platform === 'win32') {
       // Windows: usa puertos COM (COM1, COM2, etc.)
