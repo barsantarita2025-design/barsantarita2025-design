@@ -146,6 +146,13 @@ export const closeSession = async (session: ShiftSession): Promise<void> => {
   });
 };
 
+export const updateSession = async (sessionId: string, data: Partial<ShiftSession>): Promise<void> => {
+  await fetchAPI(`/sessions/${sessionId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+};
+
 export const reopenSession = async (sessionId: string, reason: string, adminUser: User): Promise<void> => {
   // 1. Check if there is currently an open session
   const current = get<ShiftSession>(STORAGE_KEYS.CURRENT_SESSION);

@@ -182,6 +182,19 @@ app.post('/api/sessions/:id/close', async (req, res) => {
   }
 });
 
+app.patch('/api/sessions/:id', async (req, res) => {
+  try {
+    const data = parseBody(req.body);
+    const session = await prisma.shiftSession.update({
+      where: { id: req.params.id },
+      data
+    });
+    res.json(session);
+  } catch (error) {
+    res.status(500).json({ error: 'Error updating session' });
+  }
+});
+
 // --- Credit / Fiao System ---
 app.get('/api/credit/customers', async (req, res) => {
   try {

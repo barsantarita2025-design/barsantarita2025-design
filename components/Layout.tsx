@@ -16,7 +16,10 @@ import {
   Shield,
   ShoppingCart,
   Sun,
-  Moon
+  Moon,
+  ChevronLeft,
+  ChevronRight,
+  Menu
 } from 'lucide-react';
 import { User, AppConfig } from '../types';
 import { getConfig } from '../services/db';
@@ -32,6 +35,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const navigate = useNavigate();
   const [config, setConfig] = React.useState<AppConfig | null>(null);
   const [theme, setTheme] = React.useState(() => localStorage.getItem('barflow-theme') || 'dark');
+  const [isCollapsed, setIsCollapsed] = React.useState(() => localStorage.getItem('barflow-sidebar-collapsed') === 'true');
 
   React.useEffect(() => {
     const loadConfig = async () => {
@@ -48,6 +52,12 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     document.documentElement.setAttribute('data-theme', newTheme);
   };
 
+  const toggleSidebar = () => {
+    const newState = !isCollapsed;
+    setIsCollapsed(newState);
+    localStorage.setItem('barflow-sidebar-collapsed', String(newState));
+  };
+
   if (!config) return null;
 
   // Check if data export is needed (Example: > 30 days since last export)
@@ -58,97 +68,106 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const isActive = (path: string) => location.pathname === path ? 'bg-bar-800 text-bar-500' : 'text-slate-400 hover:text-bar-text hover:bg-bar-800';
 
   return (
-    <div className="min-h-screen bg-bar-900 flex flex-col md:flex-row">
+    <div className="min-h-screen bg-bar-900 flex flex-col md:flex-row transition-all duration-300">
       {/* Sidebar / Mobile Nav */}
-      <aside className="w-full md:w-64 bg-bar-950 border-r border-bar-700 flex flex-col flex-shrink-0 fixed md:sticky top-0 left-0 h-screen z-10">
-        <div className="p-6 border-b border-bar-700">
-          <div className="flex justify-between items-start">
-            <div>
+      <aside className={`bg-bar-950 border-r border-bar-700 flex flex-col flex-shrink-0 fixed md:sticky top-0 left-0 h-screen z-10 transition-all duration-300 ${isCollapsed ? 'w-20' : 'w-full md:w-64'}`}>
+        <div className={`p-4 border-b border-bar-700 flex flex-col items-center ${isCollapsed ? 'px-2' : 'p-6'}`}>
+          <div className={`flex w-full justify-between items-center ${isCollapsed ? 'flex-col gap-4' : 'flex-row'}`}>
+            <div className={isCollapsed ? 'flex flex-col items-center' : ''}>
               <h1 className="text-2xl font-bold text-bar-text tracking-tight flex items-center gap-2">
-                <Beer className="text-bar-500" />
-                <span>{config.barName}</span>
+                <Beer className="text-bar-500 shrink-0" />
+                {!isCollapsed && <span>{config.barName}</span>}
               </h1>
-              <p className="text-xs text-slate-500 mt-1">Usuario: {user.name}</p>
+              {!isCollapsed && <p className="text-xs text-slate-500 mt-1">Usuario: {user.name}</p>}
             </div>
-            <button
-              onClick={toggleTheme}
-              className="p-2 rounded-lg bg-bar-800 text-bar-500 hover:bg-bar-700 transition-colors"
-              title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
-            >
-              {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-            </button>
+            <div className={`flex items-center gap-1 ${isCollapsed ? 'flex-col' : ''}`}>
+              <button
+                onClick={toggleSidebar}
+                className="p-1.5 rounded-lg bg-bar-800 text-slate-400 hover:bg-bar-700 transition-colors"
+                title={isCollapsed ? 'Expandir menú' : 'Contraer menú'}
+              >
+                {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+              </button>
+              <button
+                onClick={toggleTheme}
+                className="p-1.5 rounded-lg bg-bar-800 text-bar-500 hover:bg-bar-700 transition-colors"
+                title={theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
+              >
+                {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+              </button>
+            </div>
           </div>
         </div>
 
-        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+        <nav className={`flex-1 space-y-2 overflow-y-auto no-scrollbar transition-all ${isCollapsed ? 'p-2' : 'p-4'}`}>
           {/* Admin Dashboard */}
           {user.role === 'ADMIN' && (
-            <Link to="/" className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive('/')}`}>
+            <Link to="/" className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive('/')} ${isCollapsed ? 'justify-center px-0' : ''}`} title="Dashboard">
               <LayoutDashboard size={20} />
-              <span className="font-medium">Dashboard</span>
+              {!isCollapsed && <span className="font-medium">Dashboard</span>}
             </Link>
           )}
 
           {/* Common Links */}
-          <Link to="/pos" className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive('/pos')}`}>
+          <Link to="/pos" className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive('/pos')} ${isCollapsed ? 'justify-center px-0' : ''}`} title="Punto de Venta">
             <ShoppingCart size={20} />
-            <span className="font-medium">Punto de Venta</span>
+            {!isCollapsed && <span className="font-medium">Punto de Venta</span>}
           </Link>
 
-          <Link to="/inventory" className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive('/inventory')}`}>
+          <Link to="/inventory" className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive('/inventory')} ${isCollapsed ? 'justify-center px-0' : ''}`} title="Inventario y Turno">
             <ClipboardList size={20} />
-            <span className="font-medium">Inventario y Turno</span>
+            {!isCollapsed && <span className="font-medium">Inventario y Turno</span>}
           </Link>
 
-          <Link to="/menu" className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive('/menu')}`}>
+          <Link to="/menu" className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive('/menu')} ${isCollapsed ? 'justify-center px-0' : ''}`} title="Consulta de Precios">
             <Search size={20} />
-            <span className="font-medium">Consulta de Precios</span>
+            {!isCollapsed && <span className="font-medium">Consulta de Precios</span>}
           </Link>
 
-          <Link to="/credit" className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive('/credit')}`}>
+          <Link to="/credit" className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive('/credit')} ${isCollapsed ? 'justify-center px-0' : ''}`} title="Clientes Fiados">
             <CreditCard size={20} />
-            <span className="font-medium">Clientes Fiados</span>
+            {!isCollapsed && <span className="font-medium">Clientes Fiados</span>}
           </Link>
 
-          <Link to="/reports" className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive('/reports')}`}>
+          <Link to="/reports" className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive('/reports')} ${isCollapsed ? 'justify-center px-0' : ''}`} title={user.role === 'ADMIN' ? 'Reportes Globales' : 'Historial Turnos'}>
             {user.role === 'ADMIN' ? <FileBarChart size={20} /> : <History size={20} />}
-            <span className="font-medium">{user.role === 'ADMIN' ? 'Reportes Globales' : 'Historial Turnos'}</span>
+            {!isCollapsed && <span className="font-medium">{user.role === 'ADMIN' ? 'Reportes Globales' : 'Historial Turnos'}</span>}
           </Link>
 
-          <Link to="/accounting" className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive('/accounting')}`}>
+          <Link to="/accounting" className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive('/accounting')} ${isCollapsed ? 'justify-center px-0' : ''}`} title={user.role === 'ADMIN' ? 'Contabilidad' : 'Nómina'}>
             <Calculator size={20} />
-            <span className="font-medium">{user.role === 'ADMIN' ? 'Contabilidad' : 'Nómina'}</span>
+            {!isCollapsed && <span className="font-medium">{user.role === 'ADMIN' ? 'Contabilidad' : 'Nómina'}</span>}
           </Link>
 
           {/* Admin Only Links */}
           {user.role === 'ADMIN' && (
             <>
-              <div className="pt-4 pb-2">
-                <p className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Administración</p>
-              </div>
+              {!isCollapsed && (
+                <div className="pt-4 pb-2">
+                  <p className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Administración</p>
+                </div>
+              )}
 
-
-
-              <Link to="/products" className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive('/products')}`}>
+              <Link to="/products" className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive('/products')} ${isCollapsed ? 'justify-center px-0 mt-4' : ''}`} title="Productos y Precios">
                 <Beer size={20} />
-                <span className="font-medium">Productos y Precios</span>
+                {!isCollapsed && <span className="font-medium">Productos y Precios</span>}
               </Link>
 
-              <Link to="/alerts" className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive('/alerts')}`}>
+              <Link to="/alerts" className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive('/alerts')} ${isCollapsed ? 'justify-center px-0' : ''}`} title="Alertas de Gaveta">
                 <Shield size={20} />
-                <span className="font-medium">Alertas de Gaveta</span>
+                {!isCollapsed && <span className="font-medium">Alertas de Gaveta</span>}
               </Link>
 
-              <Link to="/users" className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive('/users')}`}>
+              <Link to="/users" className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive('/users')} ${isCollapsed ? 'justify-center px-0' : ''}`} title="Usuarios">
                 <Users size={20} />
-                <span className="font-medium">Usuarios</span>
+                {!isCollapsed && <span className="font-medium">Usuarios</span>}
               </Link>
             </>
           )}
         </nav>
 
-        <div className="p-4 border-t border-bar-700">
-          {needsExport && user.role === 'ADMIN' && (
+        <div className={`p-4 border-t border-bar-700 ${isCollapsed ? 'px-2' : ''}`}>
+          {needsExport && user.role === 'ADMIN' && !isCollapsed && (
             <div className="mb-4 bg-rose-900/30 border border-rose-800 p-3 rounded text-sm text-rose-200">
               <div className="flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
@@ -165,10 +184,11 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
 
           <button
             onClick={onLogout}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-bar-800 text-slate-300 hover:bg-rose-900/50 hover:text-rose-200 rounded-lg transition-colors"
+            className={`w-full flex items-center justify-center gap-2 px-4 py-2 bg-bar-800 text-slate-300 hover:bg-rose-900/50 hover:text-rose-200 rounded-lg transition-colors ${isCollapsed ? 'px-0' : ''}`}
+            title="Cerrar Sesión"
           >
             <LogOut size={18} />
-            <span>Cerrar Sesión</span>
+            {!isCollapsed && <span>Cerrar Sesión</span>}
           </button>
         </div>
       </aside>

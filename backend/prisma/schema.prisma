@@ -197,6 +197,7 @@ model AppConfig {
   lastExportDate    String
   cashDrawerEnabled Boolean @default(false)
   cashDrawerPort    String  @default("COM1")
+  inventoryBase     Json?
 }
 
 enum Role {

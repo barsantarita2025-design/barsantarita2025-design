@@ -97,7 +97,7 @@ const App: React.FC = () => {
           />
 
           {/* POS Routes */}
-          <Route path="/pos" element={<POS />} />
+          <Route path="/pos" element={<POS user={user} />} />
 
           {/* Admin-only: Alerts Panel */}
           <Route

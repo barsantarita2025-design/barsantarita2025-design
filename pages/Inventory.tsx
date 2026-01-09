@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { getActiveSession, startSession, closeSession, getProducts, getTransactionsInRange, getConfig, updateConfig } from '../services/db';
+import { getActiveSession, startSession, closeSession, updateSession, getProducts, getTransactionsInRange, getConfig, updateConfig } from '../services/db';
 import { ShiftSession, Product, InventoryItem, SalesReport, User, CreditTransaction } from '../types';
-import { Play, Square, AlertTriangle, Lock, CheckCircle, XCircle, Loader2, DollarSign, Package, TrendingUp, TrendingDown, Wallet, MessageSquare, ChevronDown, ChevronUp } from 'lucide-react';
+import { Play, Square, Save, Search, Filter, AlertTriangle, Lock, CheckCircle, XCircle, Loader2, DollarSign, Package, TrendingUp, TrendingDown, Wallet, MessageSquare, ChevronDown, ChevronUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface InventoryProps {
@@ -30,6 +30,11 @@ const Inventory: React.FC<InventoryProps> = ({ user }) => {
   // Inventory base (persistent between sessions)
   const [inventoryBase, setInventoryBase] = useState<Record<string, number>>({});
 
+  // Search and Filter
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('Todas');
+  const [categories, setCategories] = useState<string[]>(['Todas']);
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -49,20 +54,27 @@ const Inventory: React.FC<InventoryProps> = ({ user }) => {
     try {
       const session = await getActiveSession();
       const prods = await getProducts();
-      const config = getConfig();
+      const config = await getConfig();
       setActiveSession(session);
 
       const activeProds = prods.filter(p => p.active);
       setProducts(activeProds);
 
+      const cats = ['Todas', ...new Set(activeProds.map(p => p.category))];
+      setCategories(cats);
+
       // Load inventory base from config or localStorage
-      const savedBase = localStorage.getItem('barflow_inventory_base');
       let base: Record<string, number> = {};
-      if (savedBase) {
-        try {
-          base = JSON.parse(savedBase);
-        } catch (e) {
-          console.error("Error parsing inventory base", e);
+      if (config.inventoryBase) {
+        base = config.inventoryBase as Record<string, number>;
+      } else {
+        const savedBase = localStorage.getItem('barflow_inventory_base');
+        if (savedBase) {
+          try {
+            base = JSON.parse(savedBase);
+          } catch (e) {
+            console.error("Error parsing inventory base", e);
+          }
         }
       }
       setInventoryBase(base);
@@ -110,6 +122,37 @@ const Inventory: React.FC<InventoryProps> = ({ user }) => {
     setInventoryInput(prev => ({ ...prev, [productId]: num }));
   };
 
+  const handleSaveProgress = async () => {
+    setProcessing(true);
+    try {
+      const currentInventory: InventoryItem[] = products.map(p => ({
+        productId: p.id,
+        productName: p.name,
+        count: inventoryInput[p.id] || 0
+      }));
+
+      if (activeSession) {
+        // Save to active session
+        await updateSession(activeSession.id, {
+          initialInventory: activeSession.status === 'OPEN' && !activeSession.closedAt ? activeSession.initialInventory : currentInventory,
+          finalInventory: activeSession.status === 'OPEN' ? currentInventory : activeSession.finalInventory
+        });
+        showNotification("Progreso guardado en la sesión", "success");
+      } else if (user.role === 'ADMIN') {
+        // Save as base inventory
+        setInventoryBase(inventoryInput);
+        localStorage.setItem('barflow_inventory_base', JSON.stringify(inventoryInput));
+        await updateConfig({ inventoryBase: inventoryInput });
+        showNotification("Inventario base actualizado", "success");
+      }
+    } catch (error: any) {
+      console.error("ERROR SAVE:", error);
+      showNotification("Error al guardar: " + error.message, "error");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   const handleStartShift = async () => {
     if (user.role !== 'ADMIN') {
       alert("Error de permisos: Solo el administrador puede iniciar turno.");
@@ -150,7 +193,7 @@ const Inventory: React.FC<InventoryProps> = ({ user }) => {
       return;
     }
 
-    if (!window.confirm("Confirmas que has contado el inventario y el dinero físico? Esta acción cerrará el turno.")) {
+    if (!window.confirm("Confirmas que las cantidades han sido ingresadas correctamente?")) {
       return;
     }
 
@@ -174,6 +217,7 @@ const Inventory: React.FC<InventoryProps> = ({ user }) => {
       });
       setInventoryBase(newBase);
       localStorage.setItem('barflow_inventory_base', JSON.stringify(newBase));
+      await updateConfig({ inventoryBase: newBase });
 
       let totalRevenue = 0;
       let totalCost = 0;
@@ -181,8 +225,7 @@ const Inventory: React.FC<InventoryProps> = ({ user }) => {
       const initialInv = activeSession.initialInventory || [];
 
       for (const p of currentProducts) {
-        const startItem = initialInv.find(i => i.productId === p.id);
-        const startCount = startItem ? startItem.count : 0;
+        const startCount = initialInv.find(i => i.productId === p.id)?.count || 0;
         const endCount = finalInventory.find(i => i.productId === p.id)?.count || 0;
 
         const sold = Math.max(0, startCount - endCount);
@@ -268,8 +311,6 @@ const Inventory: React.FC<InventoryProps> = ({ user }) => {
   const closeSummaryAndReset = () => {
     setShowSummary(false);
     setLastSessionSummary(null);
-
-    // Keep inventory base values in input for next session
     setInventoryInput({ ...inventoryBase });
 
     if (user.role === 'ADMIN') {
@@ -279,11 +320,16 @@ const Inventory: React.FC<InventoryProps> = ({ user }) => {
     }
   };
 
+  const filteredProducts = products.filter(p => {
+    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.category.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = selectedCategory === 'Todas' || p.category === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
+
   if (loading) return <div className="p-8 text-center text-slate-400">Cargando sistema...</div>;
 
-  // Can edit if: Admin OR (Employee AND there's an active session)
   const canEdit = user.role === 'ADMIN' || (user.role === 'EMPLOYEE' && activeSession !== null);
-  // Only admin can edit inventory when there's no active session
   const canEditBaseInventory = user.role === 'ADMIN' && !activeSession;
 
   return (
@@ -382,11 +428,11 @@ const Inventory: React.FC<InventoryProps> = ({ user }) => {
       {/* HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-bar-text">Gestion de Turno</h2>
+          <h2 className="text-3xl font-bold text-bar-text">Gestión de Turno</h2>
           <p className="text-slate-400">
             {activeSession
               ? "Turno ABIERTO - Registra el inventario final para cerrar."
-              : "Turno CERRADO - El inventario se actualizo automaticamente."}
+              : "Turno CERRADO - El inventario se actualiza automáticamente."}
           </p>
         </div>
         <div className={`px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors duration-500 ${activeSession ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700 text-slate-300'}`}>
@@ -417,22 +463,53 @@ const Inventory: React.FC<InventoryProps> = ({ user }) => {
         </div>
       )}
 
-      {/* TABLE */}
+      {/* Table & Controls */}
       <div className="bg-bar-800 rounded-xl border border-bar-700 overflow-hidden shadow-xl">
-        <div className="p-4 bg-bar-900/50 border-b border-bar-700 flex justify-between items-center cursor-pointer hover:bg-bar-800/50 transition-colors" onClick={() => setIsInventoryCollapsed(!isInventoryCollapsed)}>
-          <h3 className="font-semibold text-bar-text flex items-center gap-2">
-            <ChevronDown size={20} className={`transition-transform ${isInventoryCollapsed ? '-rotate-90' : ''}`} />
-            {activeSession ? 'Inventario Final (Cierre)' : 'Inventario Inicial (Base)'}
-          </h3>
-          <div className="flex items-center gap-3">
-            {!activeSession && canEditBaseInventory && (
-              <div className="text-sm text-emerald-400 flex items-center gap-1">
-                <AlertTriangle size={14} />
-                <span>Editable por administrador</span>
-              </div>
-            )}
-            <ChevronDown size={20} className={`text-slate-400 transition-transform ${isInventoryCollapsed ? '-rotate-90' : ''}`} />
+        <div className="p-4 bg-bar-900/50 border-b border-bar-700 space-y-4">
+          <div className="flex justify-between items-center cursor-pointer hover:bg-bar-800/50 transition-colors" onClick={() => setIsInventoryCollapsed(!isInventoryCollapsed)}>
+            <h3 className="font-semibold text-bar-text flex items-center gap-2">
+              <ChevronDown size={20} className={`transition-transform ${isInventoryCollapsed ? '-rotate-90' : ''}`} />
+              {activeSession ? 'Inventario Final (Cierre)' : 'Inventario Inicial (Base)'}
+            </h3>
+            <div className="flex items-center gap-3">
+              {!activeSession && canEditBaseInventory && (
+                <div className="text-sm text-emerald-400 flex items-center gap-1">
+                  <AlertTriangle size={14} />
+                  <span>Editable por administrador</span>
+                </div>
+              )}
+              <ChevronDown size={20} className={`text-slate-400 transition-transform ${isInventoryCollapsed ? '-rotate-90' : ''}`} />
+            </div>
           </div>
+
+          {!isInventoryCollapsed && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Buscar producto..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-bar-900 border border-bar-700 rounded-lg pl-10 pr-4 py-2 text-bar-text focus:border-bar-500 outline-none transition-all"
+                />
+              </div>
+              <div className="flex gap-2 bg-bar-900 border border-bar-700 rounded-lg p-1 overflow-x-auto no-scrollbar">
+                {categories.map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => setSelectedCategory(cat)}
+                    className={`px-3 py-1 rounded-md text-sm font-medium whitespace-nowrap transition-all ${selectedCategory === cat
+                      ? 'bg-bar-500 text-bar-950 shadow-lg'
+                      : 'text-slate-400 hover:bg-bar-800'
+                      }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {!isInventoryCollapsed && (
@@ -441,16 +518,14 @@ const Inventory: React.FC<InventoryProps> = ({ user }) => {
               <thead>
                 <tr className="bg-bar-950 text-slate-400 text-sm uppercase tracking-wider">
                   <th className="p-4">Producto</th>
-                  <th className="p-4">Categoria</th>
+                  <th className="p-4">Categoría</th>
                   {activeSession && <th className="p-4 text-center text-slate-300">Stock Inicial</th>}
-                  <th className="p-4 w-32 text-center">Cantidad Fisica</th>
+                  <th className="p-4 w-32 text-center">Cantidad Física</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-bar-700">
-                {products.map(product => {
+                {filteredProducts.map(product => {
                   const initialCount = activeSession?.initialInventory.find(i => i.productId === product.id)?.count;
-                  const baseCount = inventoryBase[product.id] || 0;
-
                   return (
                     <tr key={product.id} className="hover:bg-bar-700/30 transition-colors">
                       <td className="p-4 font-medium text-bar-text">{product.name}</td>
@@ -487,7 +562,7 @@ const Inventory: React.FC<InventoryProps> = ({ user }) => {
         )}
       </div>
 
-      {/* ACTION AREA (Fixed at bottom or static) */}
+      {/* ACTION AREA */}
       <div className="bg-bar-800 rounded-xl border border-bar-700 p-6 shadow-xl space-y-4">
 
         {activeSession && (
@@ -501,7 +576,7 @@ const Inventory: React.FC<InventoryProps> = ({ user }) => {
                 min="0"
                 value={realCash}
                 onChange={e => setRealCash(e.target.value)}
-                placeholder="Cuanto dinero hay?"
+                placeholder="Cuánto dinero hay?"
                 className="w-full bg-bar-900 border border-bar-600 rounded-xl p-3 text-white font-mono text-lg focus:border-emerald-500 outline-none"
               />
               <p className="text-xs text-slate-500 mt-1">Cuenta billetes y monedas del turno.</p>
@@ -514,39 +589,51 @@ const Inventory: React.FC<InventoryProps> = ({ user }) => {
                 type="text"
                 value={closingObs}
                 onChange={e => setClosingObs(e.target.value)}
-                placeholder="Ej: Se rompio una copa..."
+                placeholder="Ej: Se rompió una copa..."
                 className="w-full bg-bar-900 border border-bar-600 rounded-xl p-3 text-white focus:border-blue-500 outline-none"
               />
             </div>
           </div>
         )}
 
-        <div className="flex justify-end pt-2">
-          {!activeSession ? (
-            canEdit ? (
-              <button
-                type="button"
-                onClick={handleStartShift}
-                disabled={processing}
-                className="flex items-center gap-2 bg-bar-500 hover:bg-bar-400 text-bar-950 font-bold px-8 py-4 rounded-xl shadow-lg shadow-bar-500/20 transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {processing ? <Loader2 size={24} className="animate-spin" /> : <Play size={24} />}
-                {processing ? 'Iniciando...' : 'Iniciar Turno'}
-              </button>
-            ) : (
-              <span className="text-slate-500 text-sm italic py-2">Esperando apertura por administrador...</span>
-            )
-          ) : (
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4 pt-2">
+          {canEdit && (
             <button
-              type="button"
-              onClick={handleEndShift}
-              disabled={processing || !realCash}
-              className="flex items-center gap-2 bg-rose-600 hover:bg-rose-500 text-white font-bold px-8 py-4 rounded-xl shadow-lg shadow-rose-600/20 transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={handleSaveProgress}
+              disabled={processing}
+              className="flex items-center gap-2 text-emerald-400 hover:text-emerald-300 font-bold px-4 py-2 rounded-lg border border-emerald-500/30 hover:bg-emerald-500/10 transition-all disabled:opacity-50"
             >
-              {processing ? <Loader2 size={24} className="animate-spin" /> : <Square size={24} fill="currentColor" />}
-              {processing ? 'Cerrando...' : 'Cerrar Turno'}
+              <Save size={20} />
+              Guardar Progreso
             </button>
           )}
+          <div className="flex gap-4">
+            {!activeSession ? (
+              canEdit ? (
+                <button
+                  type="button"
+                  onClick={handleStartShift}
+                  disabled={processing}
+                  className="flex items-center gap-2 bg-bar-500 hover:bg-bar-400 text-bar-950 font-bold px-8 py-4 rounded-xl shadow-lg shadow-bar-500/20 transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {processing ? <Loader2 size={24} className="animate-spin" /> : <Play size={24} />}
+                  {processing ? 'Iniciando...' : 'Iniciar Turno'}
+                </button>
+              ) : (
+                <span className="text-slate-500 text-sm italic py-2">Esperando apertura por administrador...</span>
+              )
+            ) : (
+              <button
+                type="button"
+                onClick={handleEndShift}
+                disabled={processing || !realCash}
+                className="flex items-center gap-2 bg-rose-600 hover:bg-rose-500 text-white font-bold px-8 py-4 rounded-xl shadow-lg shadow-rose-600/20 transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {processing ? <Loader2 size={24} className="animate-spin" /> : <Square size={24} fill="currentColor" />}
+                {processing ? 'Cerrando...' : 'Cerrar Turno'}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

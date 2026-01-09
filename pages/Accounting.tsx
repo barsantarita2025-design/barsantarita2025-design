@@ -474,7 +474,7 @@ const Accounting: React.FC<AccountingProps> = ({ user }) => {
             </div>
 
             {/* --- TAB CONTENT: SUMMARY --- */}
-            {activeTab === 'SUMMARY' && (
+            {activeTab === 'SUMMARY' && user.role === 'ADMIN' && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         <div className="bg-bar-800 p-6 rounded-xl border border-bar-700">
@@ -563,7 +563,7 @@ const Accounting: React.FC<AccountingProps> = ({ user }) => {
             )}
 
             {/* --- TAB CONTENT: EXPENSES --- */}
-            {activeTab === 'EXPENSES' && (
+            {activeTab === 'EXPENSES' && user.role === 'ADMIN' && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in">
                     <div className="md:col-span-1 bg-bar-800 p-6 rounded-xl border border-bar-700 h-fit">
                         <h3 className="text-lg font-bold text-bar-text mb-4">Registrar Gasto / Deuda</h3>
@@ -812,81 +812,80 @@ const Accounting: React.FC<AccountingProps> = ({ user }) => {
                 </div>
             )}
             {/* --- TAB CONTENT: PURCHASES --- */}
-            {
-                activeTab === 'PURCHASES' && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in">
-                        <div className="md:col-span-1 bg-bar-800 p-6 rounded-xl border border-bar-700 h-fit">
-                            <h3 className="text-lg font-bold text-bar-text mb-4">Registrar Compra</h3>
-                            <form onSubmit={handleSavePurchase} className="space-y-4">
-                                <div>
-                                    <label className="text-sm text-slate-300">Fecha</label>
-                                    <input type="date" required value={purDate} onChange={e => setPurDate(e.target.value)} className="w-full bg-bar-900 border border-bar-600 rounded p-2 text-bar-text outline-none" />
-                                </div>
-                                <div>
-                                    <label className="text-sm text-slate-300">Producto / Descripción</label>
-                                    <input required value={purProduct} onChange={e => setPurProduct(e.target.value)} placeholder="Ej: 5 Cajas Poker" className="w-full bg-bar-900 border border-bar-600 rounded p-2 text-bar-text outline-none" />
-                                </div>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <div>
-                                        <label className="text-sm text-slate-300">Cantidad</label>
-                                        <input type="number" required value={purQty} onChange={e => setPurQty(e.target.value)} className="w-full bg-bar-900 border border-bar-600 rounded p-2 text-bar-text outline-none" placeholder="0" />
-                                    </div>
-                                    <div>
-                                        <label className="text-sm text-slate-300">Costo Unit.</label>
-                                        <input type="number" required value={purCost} onChange={e => setPurCost(e.target.value)} className="w-full bg-bar-900 border border-bar-600 rounded p-2 text-bar-text outline-none" placeholder="$" />
-                                    </div>
-                                </div>
-
-                                {purQty && purCost && (
-                                    <div className="p-2 bg-bar-900 rounded text-center">
-                                        <span className="text-xs text-slate-400">Total Compra: </span>
-                                        <span className="text-bar-text font-bold">{formatMoney(Number(purQty) * Number(purCost))}</span>
-                                    </div>
-                                )}
-
-                                <button type="submit" className="w-full bg-bar-500 hover:bg-bar-400 text-bar-950 font-bold py-2 rounded">Registrar</button>
-                            </form>
-                        </div>
-
-                        <div className="md:col-span-2 space-y-4">
-                            <h3 className="text-lg font-bold text-bar-text">Historial de Surtido</h3>
-
-                            <div className="bg-bar-800 rounded-xl border border-bar-700 overflow-hidden">
-                                <table className="w-full text-left text-sm">
-                                    <thead className="bg-bar-950 text-slate-400">
-                                        <tr>
-                                            <th className="p-3">Fecha</th>
-                                            <th className="p-3">Detalle</th>
-                                            <th className="p-3 text-center">Cant.</th>
-                                            <th className="p-3 text-right">Total</th>
-                                            <th className="p-3 w-10"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-bar-700">
-                                        {purchases.length === 0 ? (
-                                            <tr><td colSpan={5} className="p-6 text-center text-slate-500">Sin registros</td></tr>
-                                        ) : (
-                                            purchases.sort((a, b) => b.date.localeCompare(a.date)).map(p => (
-                                                <tr key={p.id} className="hover:bg-bar-700/30">
-                                                    <td className="p-3 text-slate-300">{p.date}</td>
-                                                    <td className="p-3 text-bar-text font-medium">
-                                                        {p.productName}
-                                                        <div className="text-xs text-slate-500">Unit: {formatMoney(p.unitCost)}</div>
-                                                    </td>
-                                                    <td className="p-3 text-center text-slate-400">{p.quantity}</td>
-                                                    <td className="p-3 text-right text-bar-text font-bold">{formatMoney(p.totalCost)}</td>
-                                                    <td className="p-3">
-                                                        <button onClick={() => handleDeletePurchase(p.id)} className="text-rose-500 hover:text-bar-text"><Trash2 size={16} /></button>
-                                                    </td>
-                                                </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
+            {activeTab === 'PURCHASES' && user.role === 'ADMIN' && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in">
+                    <div className="md:col-span-1 bg-bar-800 p-6 rounded-xl border border-bar-700 h-fit">
+                        <h3 className="text-lg font-bold text-bar-text mb-4">Registrar Compra</h3>
+                        <form onSubmit={handleSavePurchase} className="space-y-4">
+                            <div>
+                                <label className="text-sm text-slate-300">Fecha</label>
+                                <input type="date" required value={purDate} onChange={e => setPurDate(e.target.value)} className="w-full bg-bar-900 border border-bar-600 rounded p-2 text-bar-text outline-none" />
                             </div>
+                            <div>
+                                <label className="text-sm text-slate-300">Producto / Descripción</label>
+                                <input required value={purProduct} onChange={e => setPurProduct(e.target.value)} placeholder="Ej: 5 Cajas Poker" className="w-full bg-bar-900 border border-bar-600 rounded p-2 text-bar-text outline-none" />
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label className="text-sm text-slate-300">Cantidad</label>
+                                    <input type="number" required value={purQty} onChange={e => setPurQty(e.target.value)} className="w-full bg-bar-900 border border-bar-600 rounded p-2 text-bar-text outline-none" placeholder="0" />
+                                </div>
+                                <div>
+                                    <label className="text-sm text-slate-300">Costo Unit.</label>
+                                    <input type="number" required value={purCost} onChange={e => setPurCost(e.target.value)} className="w-full bg-bar-900 border border-bar-600 rounded p-2 text-bar-text outline-none" placeholder="$" />
+                                </div>
+                            </div>
+
+                            {purQty && purCost && (
+                                <div className="p-2 bg-bar-900 rounded text-center">
+                                    <span className="text-xs text-slate-400">Total Compra: </span>
+                                    <span className="text-bar-text font-bold">{formatMoney(Number(purQty) * Number(purCost))}</span>
+                                </div>
+                            )}
+
+                            <button type="submit" className="w-full bg-bar-500 hover:bg-bar-400 text-bar-950 font-bold py-2 rounded">Registrar</button>
+                        </form>
+                    </div>
+
+                    <div className="md:col-span-2 space-y-4">
+                        <h3 className="text-lg font-bold text-bar-text">Historial de Surtido</h3>
+
+                        <div className="bg-bar-800 rounded-xl border border-bar-700 overflow-hidden">
+                            <table className="w-full text-left text-sm">
+                                <thead className="bg-bar-950 text-slate-400">
+                                    <tr>
+                                        <th className="p-3">Fecha</th>
+                                        <th className="p-3">Detalle</th>
+                                        <th className="p-3 text-center">Cant.</th>
+                                        <th className="p-3 text-right">Total</th>
+                                        <th className="p-3 w-10"></th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-bar-700">
+                                    {purchases.length === 0 ? (
+                                        <tr><td colSpan={5} className="p-6 text-center text-slate-500">Sin registros</td></tr>
+                                    ) : (
+                                        purchases.sort((a, b) => b.date.localeCompare(a.date)).map(p => (
+                                            <tr key={p.id} className="hover:bg-bar-700/30">
+                                                <td className="p-3 text-slate-300">{p.date}</td>
+                                                <td className="p-3 text-bar-text font-medium">
+                                                    {p.productName}
+                                                    <div className="text-xs text-slate-500">Unit: {formatMoney(p.unitCost)}</div>
+                                                </td>
+                                                <td className="p-3 text-center text-slate-400">{p.quantity}</td>
+                                                <td className="p-3 text-right text-bar-text font-bold">{formatMoney(p.totalCost)}</td>
+                                                <td className="p-3">
+                                                    <button onClick={() => handleDeletePurchase(p.id)} className="text-rose-500 hover:text-bar-text"><Trash2 size={16} /></button>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
-                )
+                </div>
+            )
             }
         </div >
     );

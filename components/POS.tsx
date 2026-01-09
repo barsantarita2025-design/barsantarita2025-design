@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Plus, Minus, Trash2, Search, CreditCard, DollarSign, Receipt, X, Calculator, AlertTriangle, Settings, RefreshCw, Usb, Play, CheckCircle, XCircle, Save, Database } from 'lucide-react';
 import type { POSProduct, ProductCategory, SaleItem, POSSale, DailyStats } from '../types-pos';
+import { User } from '../types';
 import type { SerialDrawerService } from '../services/serialDrawerService';
 import { getProducts } from '../services/productService';
 import { saveSale, getDailyStats } from '../services/posService';
@@ -78,7 +79,7 @@ interface CartItem {
 // -------------------------------------------------------------------------------------------------------------
 // COMPONENTE PRINCIPAL DEL POS
 // -------------------------------------------------------------------------------------------------------------
-export function POS() {
+export function POS({ user }: { user: User }) {
   // Estados para productos y categorías
   const [products, setProducts] = useState<POSProduct[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
@@ -587,9 +588,11 @@ export function POS() {
                       <div className="font-bold text-sm text-bar-text group-hover:text-amber-400 mb-1 leading-tight">
                         {product.name}
                       </div>
-                      <div className="text-[11px] text-gray-500 mb-2">
-                        Costo: {formatCOP(product.costPrice)}
-                      </div>
+                      {user.role === 'ADMIN' && (
+                        <div className="text-[11px] text-gray-500 mb-2">
+                          Costo: {formatCOP(product.costPrice)}
+                        </div>
+                      )}
                     </div>
                     <div className="mt-auto">
                       <div className="text-lg font-black text-green-400">

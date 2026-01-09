@@ -70,6 +70,7 @@ export interface AppConfig {
   lastExportDate: string;
   cashDrawerEnabled: boolean;
   cashDrawerPort: string;
+  inventoryBase?: Record<string, number>;
 }
 
 // --- FIAO SYSTEM ---
