@@ -343,39 +343,80 @@ app.get('/api/config', async (req, res) => {
 });
 
 app.patch('/api/config', async (req, res) => {
-  try {
-    const data = parseBody(req.body);
-    console.log('Updating config with data:', data);
+  // Removes undefined, converts NaN/Infinity to null, and normalizes empty strings
+  const sanitizeForJson = (value: any): any => {
+    if (value === undefined) return null;
+    if (value === '') return null;
 
-    // First, ensure the config exists
-    let config = await prisma.appConfig.findUnique({ where: { id: 'default' } });
-
-    if (!config) {
-      console.log('Config does not exist, creating it first...');
-      config = await prisma.appConfig.create({
-        data: {
-          id: 'default',
-          barName: 'Bar Flow',
-          lastExportDate: new Date().toISOString(),
-          cashDrawerEnabled: false,
-          cashDrawerPort: 'COM1',
-          ...data
-        }
-      });
-    } else {
-      config = await prisma.appConfig.update({
-        where: { id: 'default' },
-        data
-      });
+    if (typeof value === 'number') {
+      return Number.isFinite(value) ? value : null; // handles NaN/Infinity
     }
 
-    console.log('Config updated successfully:', config);
+    if (typeof value === 'string') {
+      // If it's a numeric string like "12" or "12.5", convert to number
+      const trimmed = value.trim();
+      if (trimmed !== '' && /^-?\d+(\.\d+)?$/.test(trimmed)) {
+        const n = Number(trimmed);
+        return Number.isFinite(n) ? n : null;
+      }
+      return value;
+    }
+
+    if (Array.isArray(value)) return value.map(sanitizeForJson);
+
+    if (value && typeof value === 'object') {
+      const out: Record<string, any> = {};
+      for (const [k, v] of Object.entries(value)) {
+        out[k] = sanitizeForJson(v);
+      }
+      return out;
+    }
+
+    return value;
+  };
+
+  try {
+    const raw = parseBody(req.body);
+
+    if (!raw || Object.keys(raw).length === 0) {
+      return res.status(400).json({ error: 'Body is empty or invalid' });
+    }
+
+    // Only allow known fields to avoid accidentally sending bad/extra keys
+    const data: any = {};
+    if (raw.barName !== undefined) data.barName = raw.barName;
+    if (raw.lastExportDate !== undefined) data.lastExportDate = raw.lastExportDate;
+    if (raw.cashDrawerEnabled !== undefined) data.cashDrawerEnabled = raw.cashDrawerEnabled;
+    if (raw.cashDrawerPort !== undefined) data.cashDrawerPort = raw.cashDrawerPort;
+
+    if (raw.inventoryBase !== undefined) {
+      data.inventoryBase = sanitizeForJson(raw.inventoryBase);
+    }
+
+    console.log('PATCH /api/config - sanitized data:', JSON.stringify(data));
+
+    const config = await prisma.appConfig.upsert({
+      where: { id: 'default' },
+      create: {
+        id: 'default',
+        barName: 'Bar Flow',
+        lastExportDate: new Date().toISOString(),
+        cashDrawerEnabled: false,
+        cashDrawerPort: 'COM1',
+        ...data
+      },
+      update: data
+    });
+
     res.json(config);
   } catch (error) {
-    console.error('Error updating config:', error);
+    console.error('CRITICAL ERROR updating config:', error);
     res.status(500).json({
       error: 'Error updating config',
-      details: error instanceof Error ? error.message : String(error)
+      details: error instanceof Error ? error.message : String(error),
+      stack: process.env.NODE_ENV !== 'production'
+        ? (error instanceof Error ? error.stack : undefined)
+        : undefined
     });
   }
 });
