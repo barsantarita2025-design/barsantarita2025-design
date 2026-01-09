@@ -1,46 +1,57 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>A&A Consultoras SST | Medellín | Seguridad y Salud en el Trabajo</title>
 
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
-      rel="stylesheet"
-    />
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BarFlow - Contabilidad</title>
+  <link rel="icon" type="image/x-icon" href="/favicon.ico?v=1" />
+  <link rel="shortcut icon" href="/favicon.ico?v=1" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    // Theme detection and application
+    (function () {
+      const savedTheme = localStorage.getItem('barflow-theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    })();
 
-    <style>
-      body {
-        font-family: "Inter", sans-serif;
-        scroll-behavior: smooth;
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif']
+          },
+          colors: {
+            bar: {
+              900: 'var(--bg-900)',
+              800: 'var(--bg-800)',
+              700: 'var(--bg-700)',
+              500: 'var(--accent)',
+              400: 'var(--accent-hover)',
+              text: 'var(--text-primary)',
+              muted: 'var(--text-secondary)'
+            }
+          }
+        }
       }
-      .bg-sst-blue {
-        background-color: #003366;
-      }
-      .text-sst-blue {
-        color: #003366;
-      }
-      .border-sst-blue {
-        border-color: #003366;
-      }
-      .bg-sst-yellow {
-        background-color: #ffd700;
-      }
-      .text-sst-yellow {
-        color: #ffd700;
-      }
-    </style>
-  </head>
-
-  <body class="bg-slate-50 text-slate-900">
-    <div id="root"></div>
-
-    <!-- IMPORTANTE: esto arranca tu app React -->
-    <script type="module" src="/index.tsx"></script>
-  </body>
-</html>
+    };
+  </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.2.0",
+    "react/": "https://esm.sh/react@18.2.0/",
+    "react-dom": "https://esm.sh/react-dom@18.2.0",
+    "react-dom/": "https://esm.sh/react-dom@18.2.0/",
+    "react-router-dom": "https://esm.sh/react-router-dom@6.22.3?deps=react@18.2.0,react-dom@18.2.0",
+    "recharts": "https://esm.sh/recharts@2.12.0?deps=react@18.2.0,react-dom@18.2.0",
+    "lucide-react": "https://esm.sh/lucide-react@0.363.0?deps=react@18.2.0,react-dom@18.2.0"
+  }
+}
+</script>
+  <link rel="stylesheet" href="/index.css">
+</head>
 
 <body>
   <div id="root"></div>
