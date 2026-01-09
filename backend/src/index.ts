@@ -7,15 +7,18 @@ dotenv.config();
 
 const app = express();
 
-// --- Prisma Client para Serverless ---
-const prisma = new PrismaClient({
+// --- Prisma Singleton para Serverless ---
+const globalForPrisma = global as unknown as { prisma: PrismaClient };
+const prisma = globalForPrisma.prisma || new PrismaClient({
   log: ['error', 'warn'],
 });
+// Re-use connection in serverless warm starts
+globalForPrisma.prisma = prisma;
 
 const PORT = process.env.PORT || 3001;
 
 // Exportar app para serverless
-export { app };
+export { app, prisma };
 
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
@@ -387,14 +390,46 @@ app.patch('/api/config', async (req, res) => {
     if (raw.cashDrawerPort !== undefined) data.cashDrawerPort = raw.cashDrawerPort;
 
     if (raw.inventoryBase !== undefined) {
-      data.inventoryBase = sanitizeForJson(raw.inventoryBase);
+      if (raw.inventoryBase && typeof raw.inventoryBase === 'object') {
+        const sanitizedInventoryBase: Record<string, any> = {};
+        for (const [key, value] of Object.entries(raw.inventoryBase)) {
+          if (value === undefined || value === '') {
+            sanitizedInventoryBase[key] = null;
+          } else if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (trimmed === '') {
+              sanitizedInventoryBase[key] = null;
+            } else if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+              const n = Number(trimmed);
+              sanitizedInventoryBase[key] = Number.isFinite(n) ? n : null;
+            } else {
+              sanitizedInventoryBase[key] = value;
+            }
+          } else if (typeof value === 'number') {
+            sanitizedInventoryBase[key] = Number.isFinite(value) ? value : null;
+          } else {
+            sanitizedInventoryBase[key] = value;
+          }
+        }
+        data.inventoryBase = sanitizedInventoryBase;
+      } else {
+        data.inventoryBase = sanitizeForJson(raw.inventoryBase);
+      }
     }
 
     console.log('PATCH /api/config - sanitized data:', JSON.stringify(data));
 
-    const config = await prisma.appConfig.update({
+    const config = await prisma.appConfig.upsert({
       where: { id: 'default' },
-      data
+      create: {
+        id: 'default',
+        barName: 'Bar Flow',
+        lastExportDate: new Date().toISOString(),
+        cashDrawerEnabled: false,
+        cashDrawerPort: 'COM1',
+        ...data
+      },
+      update: data
     });
 
     res.json(config);
