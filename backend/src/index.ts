@@ -395,17 +395,9 @@ app.patch('/api/config', async (req, res) => {
 
     console.log('PATCH /api/config - sanitized data:', JSON.stringify(data));
 
-    const config = await prisma.appConfig.upsert({
+    const config = await prisma.appConfig.update({
       where: { id: 'default' },
-      create: {
-        id: 'default',
-        barName: 'Bar Flow',
-        lastExportDate: new Date().toISOString(),
-        cashDrawerEnabled: false,
-        cashDrawerPort: 'COM1',
-        ...data
-      },
-      update: data
+      data
     });
 
     res.json(config);
