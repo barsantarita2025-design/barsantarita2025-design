@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "backend:dev": "cd backend && npm run dev",
     "backend:seed": "cd backend && npm run prisma:seed",
-    "backend:push": "cd backend && npm run prisma:push"
+    "backend:push": "cd backend && npm run prisma:push",
+    "netlify-build": "npm run build && cd backend && npm run build && cp -R ./dist/* ../functions/"
   },
   "dependencies": {
     "@prisma/client": "^6.2.1",

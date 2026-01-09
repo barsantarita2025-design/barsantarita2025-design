@@ -36,11 +36,30 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
   const [config, setConfig] = React.useState<AppConfig | null>(null);
   const [theme, setTheme] = React.useState(() => localStorage.getItem('barflow-theme') || 'dark');
   const [isCollapsed, setIsCollapsed] = React.useState(() => localStorage.getItem('barflow-sidebar-collapsed') === 'true');
+  const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const loadConfig = async () => {
-      const data = await getConfig();
-      setConfig(data);
+      try {
+        const data = await getConfig();
+        if (data) {
+          setConfig(data);
+        } else {
+          throw new Error("Configuración no encontrada");
+        }
+      } catch (err: any) {
+        console.error('CRITICAL: Failed to load config:', err);
+        setError("Error de conexión con el servidor");
+        // Fallback para evitar pantalla en blanco
+        setConfig({
+          id: 'default',
+          barName: 'Bar Flow',
+          lastExportDate: new Date().toISOString(),
+          cashDrawerEnabled: false,
+          cashDrawerPort: 'COM1',
+          inventoryBase: {}
+        });
+      }
     };
     loadConfig();
   }, []);
@@ -58,7 +77,15 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
     localStorage.setItem('barflow-sidebar-collapsed', String(newState));
   };
 
-  if (!config) return null;
+  if (!config) {
+    return (
+      <div className="min-h-screen bg-bar-900 flex flex-col items-center justify-center p-4 text-center">
+        <div className="w-16 h-16 border-4 border-bar-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <h2 className="text-xl font-bold text-bar-text">Iniciando Bar Flow...</h2>
+        <p className="text-slate-500 mt-2">Cargando configuración del sistema</p>
+      </div>
+    );
+  }
 
   // Check if data export is needed (Example: > 30 days since last export)
   const daysSinceExport = (new Date().getTime() - new Date(config.lastExportDate).getTime()) / (1000 * 3600 * 24);
@@ -69,6 +96,19 @@ const Layout: React.FC<LayoutProps> = ({ children, user, onLogout }) => {
 
   return (
     <div className="min-h-screen bg-bar-900 flex flex-col md:flex-row transition-all duration-300">
+      {/* Error notification if any */}
+      {error && (
+        <div className="fixed top-4 right-4 z-[9999] bg-rose-900/90 border border-rose-500 p-4 rounded-xl shadow-2xl animate-in slide-in-from-top-4">
+          <div className="flex items-center gap-3 text-rose-100">
+            <AlertTriangle className="w-5 h-5" />
+            <div className="text-sm">
+              <p className="font-bold">Aviso del Sistema</p>
+              <p>{error}. Trabajando en modo local.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sidebar / Mobile Nav */}
       <aside className={`bg-bar-950 border-r border-bar-700 flex flex-col flex-shrink-0 fixed md:sticky top-0 left-0 h-screen z-10 transition-all duration-300 ${isCollapsed ? 'w-20' : 'w-full md:w-64'}`}>
         <div className={`p-4 border-b border-bar-700 flex flex-col items-center ${isCollapsed ? 'px-2' : 'p-6'}`}>

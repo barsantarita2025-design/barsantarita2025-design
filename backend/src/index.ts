@@ -12,7 +12,8 @@ const globalForPrisma = global as unknown as { prisma: PrismaClient };
 const prisma = globalForPrisma.prisma || new PrismaClient({
   log: ['error', 'warn'],
 });
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+// Re-use connection in serverless warm starts
+globalForPrisma.prisma = prisma;
 
 const PORT = process.env.PORT || 3001;
 
@@ -298,15 +299,46 @@ app.get('/api/accounting/purchases', async (req, res) => {
 // --- Config ---
 app.get('/api/config', async (req, res) => {
   try {
+    console.log('Fetching AppConfig...');
     let config = await prisma.appConfig.findUnique({ where: { id: 'default' } });
     if (!config) {
-      config = await prisma.appConfig.create({
-        data: { id: 'default', barName: 'Bar Flow', lastExportDate: new Date().toISOString() }
-      });
+      console.log('Default config not found, creating...');
+      try {
+        config = await prisma.appConfig.create({
+          data: {
+            id: 'default',
+            barName: 'Bar Flow',
+            lastExportDate: new Date().toISOString(),
+            cashDrawerEnabled: false,
+            cashDrawerPort: 'COM1'
+          }
+        });
+        console.log('Config created successfully:', config);
+      } catch (createError) {
+        console.error('Error creating config:', createError);
+        // If creation fails, return a default config without saving
+        return res.json({
+          id: 'default',
+          barName: 'Bar Flow',
+          lastExportDate: new Date().toISOString(),
+          cashDrawerEnabled: false,
+          cashDrawerPort: 'COM1',
+          inventoryBase: null
+        });
+      }
     }
     res.json(config);
   } catch (error) {
-    res.status(500).json({ error: 'Error fetching config' });
+    console.error('CRITICAL ERROR fetching config:', error);
+    // Return a default config instead of 500 error to prevent blank screen
+    res.json({
+      id: 'default',
+      barName: 'Bar Flow',
+      lastExportDate: new Date().toISOString(),
+      cashDrawerEnabled: false,
+      cashDrawerPort: 'COM1',
+      inventoryBase: null
+    });
   }
 });
 
