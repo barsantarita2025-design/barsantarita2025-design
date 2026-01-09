@@ -7,18 +7,15 @@ dotenv.config();
 
 const app = express();
 
-// --- Prisma Singleton para Serverless ---
-const globalForPrisma = global as unknown as { prisma: PrismaClient };
-const prisma = globalForPrisma.prisma || new PrismaClient({
+// --- Prisma Client para Serverless ---
+const prisma = new PrismaClient({
   log: ['error', 'warn'],
 });
-// Re-use connection in serverless warm starts
-globalForPrisma.prisma = prisma;
 
 const PORT = process.env.PORT || 3001;
 
 // Exportar app para serverless
-export { app, prisma };
+export { app };
 
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
