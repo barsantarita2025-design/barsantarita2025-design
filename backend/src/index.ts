@@ -345,13 +345,38 @@ app.get('/api/config', async (req, res) => {
 app.patch('/api/config', async (req, res) => {
   try {
     const data = parseBody(req.body);
-    const config = await prisma.appConfig.update({
-      where: { id: 'default' },
-      data
-    });
+    console.log('Updating config with data:', data);
+
+    // First, ensure the config exists
+    let config = await prisma.appConfig.findUnique({ where: { id: 'default' } });
+
+    if (!config) {
+      console.log('Config does not exist, creating it first...');
+      config = await prisma.appConfig.create({
+        data: {
+          id: 'default',
+          barName: 'Bar Flow',
+          lastExportDate: new Date().toISOString(),
+          cashDrawerEnabled: false,
+          cashDrawerPort: 'COM1',
+          ...data
+        }
+      });
+    } else {
+      config = await prisma.appConfig.update({
+        where: { id: 'default' },
+        data
+      });
+    }
+
+    console.log('Config updated successfully:', config);
     res.json(config);
   } catch (error) {
-    res.status(500).json({ error: 'Error updating config' });
+    console.error('Error updating config:', error);
+    res.status(500).json({
+      error: 'Error updating config',
+      details: error instanceof Error ? error.message : String(error)
+    });
   }
 });
 
