@@ -258,6 +258,32 @@ app.post('/api/credit/customers/:id/transactions', async (req, res) => {
   }
 });
 
+// --- Credit Transactions Range (for shift closing) ---
+app.get('/api/credit/transactions/range', async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    
+    if (!startDate || !endDate) {
+      return res.status(400).json({ error: 'startDate and endDate are required' });
+    }
+    
+    const transactions = await prisma.creditTransaction.findMany({
+      where: {
+        date: {
+          gte: new Date(startDate as string),
+          lte: new Date(endDate as string)
+        }
+      },
+      orderBy: { date: 'asc' }
+    });
+    
+    res.json(transactions);
+  } catch (error) {
+    console.error('Error fetching credit transactions by range:', error);
+    res.status(500).json({ error: 'Error fetching credit transactions' });
+  }
+});
+
 // --- Accounting ---
 app.get('/api/accounting/expenses', async (req, res) => {
   try {
