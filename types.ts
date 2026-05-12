@@ -98,6 +98,8 @@ export interface CreditTransaction {
   type: 'DEBT' | 'PAYMENT';
   paymentMethod?: PaymentMethod;
   observation: string;
+  shiftSessionId?: string;
+  originalShiftSessionId?: string;
 }
 
 // --- ACCOUNTING SYSTEM ---
@@ -137,6 +139,28 @@ export interface Purchase {
   unitCost: number;
   totalCost: number;
   observations?: string;
+}
+
+export type FinancialMovementType = 'PRODUCTION' | 'PAYMENT';
+export type FinancialMovementSource = 'CASH_DRAWER' | 'ADMIN_FUNDS';
+export type FinancialMovementStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+export interface FinancialMovement {
+  id: string;
+  type: FinancialMovementType;
+  source: FinancialMovementSource;
+  amount: number;
+  date: string;
+  invoiceNumber?: string;
+  description?: string;
+  status: FinancialMovementStatus;
+  employeeId: string;
+  employeeName: string;
+  sessionId?: string;
+  approvedById?: string;
+  approvedAt?: string;
+  rejectionReason?: string;
+  employee?: User;
 }
 
 // ======================

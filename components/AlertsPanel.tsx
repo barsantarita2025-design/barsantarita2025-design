@@ -195,67 +195,66 @@ export function AlertsPanel() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-4 p-4 bg-gray-800/30">
-        <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
-          <div className="text-sm text-gray-400">Total Alertas</div>
-          <div className="text-2xl font-bold">{alerts.length}</div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-5 bg-gray-800/30">
+        <div className="bg-gray-800 rounded-2xl p-5 border border-gray-700 shadow-lg">
+          <div className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1">Alertas Totales</div>
+          <div className="text-3xl font-black text-bar-text font-mono">{alerts.length}</div>
         </div>
-        <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
-          <div className="text-sm text-gray-400">Pendientes</div>
-          <div className="text-2xl font-bold text-amber-400">{pendingCount}</div>
+        <div className="bg-gray-800 rounded-2xl p-5 border border-gray-700 shadow-lg">
+          <div className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1">Pendientes</div>
+          <div className="text-3xl font-black text-amber-400 font-mono">{pendingCount}</div>
         </div>
-        <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
-          <div className="text-sm text-gray-400">Críticas</div>
-          <div className="text-2xl font-bold text-red-400">{criticalCount}</div>
+        <div className="bg-gray-800 rounded-2xl p-5 border border-gray-700 shadow-lg">
+          <div className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1">Críticas</div>
+          <div className="text-3xl font-black text-red-400 font-mono">{criticalCount}</div>
         </div>
-        <div className="bg-gray-800 rounded-xl p-4 border border-gray-700">
-          <div className="text-sm text-gray-400">Hoy</div>
-          <div className="text-2xl font-bold text-green-400">
+        <div className="bg-gray-800 rounded-2xl p-5 border border-gray-700 shadow-lg">
+          <div className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1">Hoy</div>
+          <div className="text-3xl font-black text-green-400 font-mono">
             {alerts.filter(a => new Date(a.date).toDateString() === new Date().toDateString()).length}
           </div>
         </div>
       </div>
 
       {/* Filtros */}
-      <div className="px-4 pb-4 flex items-center gap-4 flex-wrap">
+      <div className="px-5 pb-5 flex flex-col md:flex-row items-stretch md:items-center gap-4">
         {/* Buscador */}
-        <div className="relative flex-1 min-w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+        <div className="relative flex-1">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
           <input
             type="text"
-            placeholder="Buscar alertas..."
+            placeholder="Buscar por mensaje..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-amber-400"
+            className="w-full pl-12 pr-4 py-4 md:py-2.5 bg-gray-700 border border-gray-600 rounded-2xl md:rounded-lg text-sm font-bold focus:outline-none focus:border-amber-400 transition-all shadow-inner"
           />
         </div>
 
-        {/* Filtro por estado */}
-        <div className="flex items-center gap-2">
-          <Filter className="w-5 h-5 text-gray-400" />
-          <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value as 'ALL' | 'PENDING' | 'ACKNOWLEDGED')}
-            className="px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-amber-400"
-          >
-            <option value="ALL">Todas</option>
-            <option value="PENDING">Pendientes</option>
-            <option value="ACKNOWLEDGED">Reconocidas</option>
-          </select>
-        </div>
+        <div className="flex gap-2 overflow-x-auto no-scrollbar md:overflow-visible">
+            {/* Filtro por estado */}
+            <select
+                value={filter}
+                onChange={(e) => setFilter(e.target.value as 'ALL' | 'PENDING' | 'ACKNOWLEDGED')}
+                className="flex-1 md:flex-none px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-xs font-black uppercase tracking-widest focus:outline-none"
+            >
+                <option value="ALL">TODAS</option>
+                <option value="PENDING">PENDIENTES</option>
+                <option value="ACKNOWLEDGED">LEÍDAS</option>
+            </select>
 
-        {/* Filtro por severidad */}
-        <select
-          value={severityFilter}
-          onChange={(e) => setSeverityFilter(e.target.value as AlertSeverity | 'ALL')}
-          className="px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-amber-400"
-        >
-          <option value="ALL">Todas las severidades</option>
-          <option value="CRITICAL">🔴 Críticas</option>
-          <option value="HIGH">🟠 Altas</option>
-          <option value="MEDIUM">🟡 Medias</option>
-          <option value="LOW">🔵 Bajas</option>
-        </select>
+            {/* Filtro por severidad */}
+            <select
+                value={severityFilter}
+                onChange={(e) => setSeverityFilter(e.target.value as AlertSeverity | 'ALL')}
+                className="flex-1 md:flex-none px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-xs font-black uppercase tracking-widest focus:outline-none"
+            >
+                <option value="ALL">NIVEL</option>
+                <option value="CRITICAL">🔴 CRÍTICO</option>
+                <option value="HIGH">🟠 ALTO</option>
+                <option value="MEDIUM">🟡 MEDIO</option>
+                <option value="LOW">🔵 BAJO</option>
+            </select>
+        </div>
       </div>
 
       {/* Lista de alertas */}

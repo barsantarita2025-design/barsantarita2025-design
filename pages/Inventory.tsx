@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { getActiveSession, startSession, closeSession, updateSession, getProducts, getTransactionsInRange, getConfig, updateConfig } from '../services/db';
-import { ShiftSession, Product, InventoryItem, SalesReport, User, CreditTransaction } from '../types';
-import { Play, Square, Save, Search, Filter, AlertTriangle, Lock, CheckCircle, XCircle, Loader2, DollarSign, Package, TrendingUp, TrendingDown, Wallet, MessageSquare, ChevronDown, ChevronUp } from 'lucide-react';
+import { getActiveSession, startSession, closeSession, updateSession, getProducts, getTransactionsInRange, getConfig, updateConfig, getSessionFinancialMovements, requestFinancialMovementCorrection } from '../services/db';
+import { ShiftSession, Product, InventoryItem, SalesReport, User, CreditTransaction, FinancialMovement } from '../types';
+import { Play, Square, Save, Search, Filter, AlertTriangle, Lock, CheckCircle, XCircle, Loader2, DollarSign, Package, TrendingUp, TrendingDown, Wallet, MessageSquare, ChevronDown, ChevronUp, Receipt, Calculator, AlertCircle, Clock, X, History as HistoryIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { FinancialMovementsForm } from '../components/FinancialMovementsForm';
 
 interface InventoryProps {
   user: User;
@@ -30,10 +31,38 @@ const Inventory: React.FC<InventoryProps> = ({ user }) => {
   // Inventory base (persistent between sessions)
   const [inventoryBase, setInventoryBase] = useState<Record<string, number>>({});
 
+  // Financial Movements Modal
+  const [showMovementForm, setShowMovementForm] = useState(false);
+
   // Search and Filter
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Todas');
   const [categories, setCategories] = useState<string[]>(['Todas']);
+  const [sessionMovements, setSessionMovements] = useState<FinancialMovement[]>([]);
+  
+  // Correction State
+  const [showCorrectionModal, setShowCorrectionModal] = useState(false);
+  const [correctionMovement, setCorrectionMovement] = useState<FinancialMovement | null>(null);
+  const [correctionAmount, setCorrectionAmount] = useState('');
+  const [correctionReason, setCorrectionReason] = useState('');
+  const [isSubmittingCorrection, setIsSubmittingCorrection] = useState(false);
+  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
+
+  const toggleRow = (id: string) => {
+    setExpandedRows(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const formatFullDate = (dateStr: string) => {
+    const d = new Date(dateStr);
+    return d.toLocaleString('es-CO', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+  };
 
   const navigate = useNavigate();
 
@@ -50,12 +79,106 @@ const Inventory: React.FC<InventoryProps> = ({ user }) => {
     }).format(amount);
   };
 
+  const renderMovementDetails = (m: FinancialMovement) => (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="space-y-3">
+        <div>
+          <p className="text-[10px] text-slate-500 font-bold uppercase mb-1">Observación detallada</p>
+          <p className="text-sm text-slate-300 italic">"{m.description || 'No hay observaciones adicionales'}"</p>
+        </div>
+        {m.type === 'PAYMENT' && (
+          <div>
+            <p className="text-[10px] text-slate-500 font-bold uppercase mb-1">Método de Pago / Origen</p>
+            <p className="text-sm text-blue-400 font-bold flex items-center gap-2">
+              {m.source === 'CASH_DRAWER' ? '🏪 Efectivo de Caja' : '👤 Fondos del Administrador'}
+            </p>
+          </div>
+        )}
+      </div>
+      <div className="space-y-3">
+        <div>
+          <p className="text-[10px] text-slate-500 font-bold uppercase mb-1">Estado del Movimiento</p>
+          <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${
+            m.status === 'APPROVED' ? 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/30' :
+            m.status === 'REJECTED' ? 'bg-rose-500/10 text-rose-500 border border-rose-500/30' :
+            'bg-amber-500/20 text-amber-500 border border-amber-500/30'
+          }`}>
+            {m.status === 'APPROVED' ? 'Aprobado' : m.status === 'REJECTED' ? 'Rechazado' : 'Pendiente de Auditoría'}
+          </span>
+        </div>
+        
+        {m.originalAmount && (
+          <div className="flex items-center gap-2 text-xs text-slate-500 bg-bar-950/50 p-3 rounded-xl border border-bar-700">
+            <HistoryIcon size={16} className="text-amber-500/50" />
+            <div>
+              <p className="font-bold text-amber-500/70 text-[10px] uppercase">Historial de Corrección</p>
+              <p>Corregido: de <span className="line-through">{formatCOP(m.originalAmount)}</span> a <span className="text-slate-300 font-bold">{formatCOP(m.amount)}</span></p>
+              <p className="text-[10px] italic mt-1">— "{m.correctionReason}"</p>
+            </div>
+          </div>
+        )}
+
+        {(!m.correctionStatus || m.correctionStatus === 'REJECTED') && (
+          <button 
+            onClick={() => {
+                setCorrectionMovement(m);
+                setCorrectionAmount(m.amount.toString());
+                setShowCorrectionModal(true);
+            }}
+            className="text-xs text-amber-500 hover:text-amber-400 font-bold flex items-center gap-2 mt-2"
+          >
+            <AlertCircle size={14} /> Solicitar Corrección de Monto
+          </button>
+        )}
+        
+        {m.correctionStatus === 'PENDING' && (
+          <div className="flex items-center gap-2 text-amber-400 bg-amber-400/10 p-2 rounded border border-amber-400/20 mt-2">
+            <Clock size={14} />
+            <span className="text-[10px] font-bold uppercase">Corrección en trámite...</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const handleRequestCorrection = async () => {
+    if (!correctionMovement || !correctionAmount || !correctionReason) return;
+    
+    setIsSubmittingCorrection(true);
+    try {
+        await requestFinancialMovementCorrection(
+            correctionMovement.id, 
+            parseFloat(correctionAmount), 
+            correctionReason
+        );
+        showNotification("Solicitud de corrección enviada", "success");
+        setShowCorrectionModal(false);
+        setCorrectionAmount('');
+        setCorrectionReason('');
+        // Reload movements
+        if (activeSession) {
+          const movements = await getSessionFinancialMovements(activeSession.id);
+          setSessionMovements(movements);
+        }
+    } catch (error) {
+        console.error("Error requesting correction:", error);
+        showNotification("Error al enviar la solicitud", "error");
+    } finally {
+        setIsSubmittingCorrection(false);
+    }
+  };
+
   const loadData = async () => {
     try {
       const session = await getActiveSession();
       const prods = await getProducts();
       const config = await getConfig();
       setActiveSession(session);
+
+      if (session) {
+        const movements = await getSessionFinancialMovements(session.id);
+        setSessionMovements(movements);
+      }
 
       const activeProds = prods.filter(p => p.active);
       setProducts(activeProds);
@@ -193,13 +316,23 @@ const Inventory: React.FC<InventoryProps> = ({ user }) => {
       return;
     }
 
-    if (!window.confirm("Confirmas que las cantidades han sido ingresadas correctamente?")) {
-      return;
-    }
-
+    // --- CHECK FOR PENDING FINANCIAL MOVEMENTS ---
     setProcessing(true);
-
     try {
+      const allMovements = await getSessionFinancialMovements(activeSession.id);
+      const pendingCount = allMovements.filter(m => m.status === 'PENDING').length;
+
+      if (pendingCount > 0) {
+        alert(`¡CRÍTICO! No se puede cerrar el turno porque hay ${pendingCount} movimiento(s) financiero(s) pendiente(s) de aprobación. Por favor contacta al administrador.`);
+        setProcessing(false);
+        return;
+      }
+
+      if (!window.confirm("Confirmas que las cantidades han sido ingresadas correctamente?")) {
+        setProcessing(false);
+        return;
+      }
+
       const currentProducts = await getProducts();
       const realCashValue = parseInt(realCash);
 
@@ -254,19 +387,34 @@ const Inventory: React.FC<InventoryProps> = ({ user }) => {
       const fiaos = creditTransactions.filter(t => t.type === 'DEBT');
       const totalCreditSales = fiaos.reduce((acc, t) => acc + t.amount, 0);
 
-      // b. Payments (Abonos) received during this shift -> Add to Cash (ONLY if CASH method)
-      const cashPayments = creditTransactions.filter(t => t.type === 'PAYMENT' && t.paymentMethod === 'CASH');
+      // b. Payments (Abonos) received during this shift -> Add to Cash (ONLY if CASH method and from SAME shift)
+      const cashPayments = creditTransactions.filter(t => 
+        t.type === 'PAYMENT' && 
+        t.paymentMethod === 'CASH' && 
+        t.shiftSessionId === t.originalShiftSessionId
+      );
       const totalCashPayments = cashPayments.reduce((acc, t) => acc + t.amount, 0);
 
       // c. Non-Cash Payments (Transfer/Card) -> Just for reporting
       const otherPayments = creditTransactions.filter(t => t.type === 'PAYMENT' && t.paymentMethod !== 'CASH');
       const totalNonCashPayments = otherPayments.reduce((acc, t) => acc + t.amount, 0);
 
-      // 3. Final Cash Calculation
-      // Cash to Deliver (Theoretical) = (Total Inventory Revenue) - (Credit Sales) + (Cash Payments Collected)
-      const cashToDeliver = totalRevenue - totalCreditSales + totalCashPayments;
+      // 3. Financial Movements Adjustments
+      const approvedMovements = allMovements.filter(m => m.status === 'APPROVED');
+      
+      const totalProduction = approvedMovements
+        .filter(m => m.type === 'PRODUCTION')
+        .reduce((acc, m) => acc + m.amount, 0);
+        
+      const totalCashPaymentsToSuppliers = approvedMovements
+        .filter(m => m.type === 'PAYMENT' && m.source === 'CASH_DRAWER')
+        .reduce((acc, m) => acc + m.amount, 0);
 
-      // 4. Difference
+      // 4. Final Cash Calculation
+      // Cash to Deliver (Theoretical) = (Total Inventory Revenue) - (Credit Sales) + (Cash Payments Collected) + (Extra Production) - (Supplier Cash Payments)
+      const cashToDeliver = totalRevenue - totalCreditSales + totalCashPayments + totalProduction - totalCashPaymentsToSuppliers;
+
+      // 5. Difference
       const difference = realCashValue - cashToDeliver;
 
       const salesReport: SalesReport = {
@@ -320,12 +468,14 @@ const Inventory: React.FC<InventoryProps> = ({ user }) => {
     }
   };
 
-  const filteredProducts = products.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.category.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory === 'Todas' || p.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+  const filteredProducts = products
+    .filter((p, index, self) => self.findIndex(t => t.id === p.id) === index)
+    .filter(p => {
+      const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.category.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCategory = selectedCategory === 'Todas' || p.category === selectedCategory;
+      return matchesSearch && matchesCategory;
+    });
 
   if (loading) return <div className="p-8 text-center text-slate-400">Cargando sistema...</div>;
 
@@ -426,20 +576,222 @@ const Inventory: React.FC<InventoryProps> = ({ user }) => {
       )}
 
       {/* HEADER */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h2 className="text-3xl font-bold text-bar-text">Gestión de Turno</h2>
-          <p className="text-slate-400">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+        <div className="w-full">
+          <h2 className="text-2xl md:text-3xl font-black text-bar-text uppercase tracking-tight">Gestión de Turno</h2>
+          <p className="text-slate-400 text-sm">
             {activeSession
               ? "Turno ABIERTO - Registra el inventario final para cerrar."
               : "Turno CERRADO - El inventario se actualiza automáticamente."}
           </p>
         </div>
-        <div className={`px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-colors duration-500 ${activeSession ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700 text-slate-300'}`}>
+        <div className={`w-full md:w-auto px-4 py-3 rounded-2xl font-black text-xs tracking-widest flex items-center justify-center gap-3 transition-all duration-700 ${activeSession ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-slate-800 text-slate-500 border border-slate-700'}`}>
           <div className={`w-3 h-3 rounded-full ${activeSession ? 'bg-emerald-500 animate-pulse' : 'bg-slate-500'}`} />
           {activeSession ? 'TURNO ABIERTO' : 'TURNO CERRADO'}
         </div>
       </div>
+
+      {/* REGISTRO DE MOVIMIENTOS - SIEMPRE VISIBLE O MUY PROMINENTE */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="md:col-span-2 bg-gradient-to-br from-bar-800 to-bar-900 border border-bar-700 p-6 rounded-2xl shadow-xl flex flex-col md:flex-row justify-between items-center gap-6">
+              <div className="space-y-2">
+                  <h3 className="text-xl font-black text-bar-text flex items-center gap-2 uppercase tracking-tighter">
+                      <Calculator className="text-bar-500" /> Control de Efectivo y Producción
+                  </h3>
+                  <p className="text-slate-400 text-sm">Registra aquí la producción diaria y los pagos a proveedores realizados en el turno.</p>
+              </div>
+              <button
+                onClick={() => setShowMovementForm(true)}
+                disabled={!activeSession}
+                className={`flex items-center gap-3 font-black px-8 py-4 rounded-2xl shadow-lg transition-all active:scale-95 group whitespace-nowrap ${activeSession 
+                        ? 'bg-bar-500 text-bar-950 hover:bg-bar-400 shadow-bar-500/20' 
+                        : 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-50'}`}
+              >
+                <Receipt className="w-6 h-6 group-hover:rotate-12 transition-transform" />
+                <span>REGISTRAR PRODUCCIÓN / PAGO</span>
+              </button>
+          </div>
+
+          {/* PEQUEÑA INFO DE MOVIMIENTOS EN EL TURNO (Opcional) */}
+          {activeSession && (
+              <div className="bg-bar-800 border border-bar-700 p-6 rounded-2xl flex flex-col justify-center items-center text-center">
+                  <span className="text-slate-500 text-xs font-bold uppercase">Estado de Cuenta Diario</span>
+                  <div className="mt-2 flex items-center gap-2 text-amber-500">
+                      <AlertCircle size={20} />
+                      <span className="text-lg font-bold">Revisa pendientes</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1">Recuerda que todo debe ser aprobado por el administrador.</p>
+              </div>
+          )}
+      </div>
+      
+      {/* MOVIMIENTOS REGISTRADOS EN ESTE TURNO (VISTA DIRECTA) */}
+      {activeSession && sessionMovements.length > 0 && (
+        <div className="bg-bar-800 rounded-2xl border border-bar-700 overflow-hidden shadow-xl animate-in fade-in slide-in-from-top-4">
+          <div className="p-5 bg-bar-900/50 border-b border-bar-700 flex justify-between items-center">
+            <h4 className="font-black text-bar-text text-sm flex items-center gap-2 uppercase tracking-tighter">
+              <Clock size={18} className="text-amber-500" /> Movimientos del Turno
+            </h4>
+            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest bg-bar-950 px-2 py-1 rounded-lg border border-bar-700/50">{sessionMovements.length} Registros</span>
+          </div>
+          <div className="overflow-x-auto">
+            {/* Desktop Table View */}
+            <table className="hidden md:table w-full text-left text-xs">
+              <thead className="bg-bar-950 text-slate-500 uppercase">
+                <tr>
+                  <th className="p-4">Fecha/Hora</th>
+                  <th className="p-4">Tipo</th>
+                  <th className="p-4">Descripción</th>
+                  <th className="p-4 text-right">Monto</th>
+                  <th className="p-4 text-center">Detalles</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-bar-700">
+                {sessionMovements.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(m => (
+                  <React.Fragment key={m.id}>
+                    <tr className="hover:bg-bar-700/20 transition-colors">
+                      <td className="p-4 text-slate-400 font-mono">
+                        {formatFullDate(m.date)}
+                      </td>
+                      <td className="p-4">
+                        <span className={`font-bold ${m.type === 'PRODUCTION' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {m.type === 'PRODUCTION' ? '💰 PROD' : '🧾 PAGO'}
+                        </span>
+                      </td>
+                      <td className="p-4 text-slate-300 max-w-[200px] truncate">
+                        {m.description || 'Sin descripción'}
+                      </td>
+                      <td className="p-4 text-right font-bold text-bar-text">
+                        {formatCOP(m.amount)}
+                      </td>
+                      <td className="p-4 text-center">
+                        <button 
+                          onClick={() => toggleRow(m.id)}
+                          className="p-1 text-slate-500 hover:text-bar-text transition-colors"
+                        >
+                          {expandedRows[m.id] ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                        </button>
+                      </td>
+                    </tr>
+                    {expandedRows[m.id] && (
+                      <tr className="bg-bar-900/40">
+                        <td colSpan={5} className="p-6 border-l-4 border-amber-500/50">
+                          {renderMovementDetails(m)}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Mobile Cards View */}
+            <div className="md:hidden divide-y divide-bar-700">
+                {sessionMovements.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(m => (
+                    <div key={m.id} className="p-4 active:bg-bar-700/30 transition-colors" onClick={() => toggleRow(m.id)}>
+                        <div className="flex justify-between items-start mb-2">
+                            <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-lg ${m.type === 'PRODUCTION' ? 'bg-emerald-950/30 text-emerald-400 border border-emerald-500/20' : 'bg-rose-950/30 text-rose-400 border border-rose-500/20'}`}>
+                                {m.type === 'PRODUCTION' ? 'Producción' : 'Pago'}
+                            </span>
+                            <span className="text-sm font-black font-mono text-bar-text">{formatCOP(m.amount)}</span>
+                        </div>
+                        <p className="text-xs text-slate-300 italic mb-2">"{m.description || 'Sin descripción'}"</p>
+                        <div className="flex justify-between items-center text-[10px] font-bold text-slate-500 uppercase">
+                            <span>{new Date(m.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            <div className="flex items-center gap-1 text-bar-500">
+                                {expandedRows[m.id] ? 'Ocultar detalles' : 'Ver más'} 
+                                {expandedRows[m.id] ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                            </div>
+                        </div>
+                        {expandedRows[m.id] && (
+                            <div className="mt-4 pt-4 border-t border-bar-700/50 animate-in fade-in slide-in-from-top-2">
+                                {renderMovementDetails(m)}
+                            </div>
+                        )}
+                    </div>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+
+
+      {/* --- FINANCIAL MOVEMENT MODAL --- */}
+      {showMovementForm && (
+        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <FinancialMovementsForm 
+            currentUser={user} 
+            activeSessionId={activeSession?.id}
+            activeSessionOpenedAt={activeSession?.openedAt}
+            sessionMovements={sessionMovements}
+            onSuccess={() => {
+              setShowMovementForm(false);
+              showNotification("Movimiento registrado correctamente", "success");
+            }}
+            onCancel={() => setShowMovementForm(false)}
+            onRequestCorrection={(m) => {
+                setCorrectionMovement(m);
+                setCorrectionAmount(m.amount.toString());
+                setShowCorrectionModal(true);
+            }}
+          />
+        </div>
+      )}
+
+      {/* --- CORRECTION MODAL --- */}
+      {showCorrectionModal && correctionMovement && (
+          <div className="fixed inset-0 z-[70] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+              <div className="bg-bar-800 w-full max-w-md rounded-2xl border border-bar-700 shadow-2xl overflow-hidden">
+                  <div className="bg-amber-600 px-6 py-4 flex justify-between items-center text-white">
+                      <h3 className="font-bold flex items-center gap-2">
+                          <AlertTriangle size={20} /> Solicitar Corrección
+                      </h3>
+                      <button onClick={() => setShowCorrectionModal(false)}><X size={20} /></button>
+                  </div>
+                  <div className="p-6 space-y-4">
+                      <div>
+                          <label className="text-xs font-bold text-slate-400 uppercase">Monto Actual</label>
+                          <p className="text-xl font-mono text-slate-500 line-through">{formatCOP(correctionMovement.amount)}</p>
+                      </div>
+                      <div>
+                          <label className="text-xs font-bold text-slate-300 uppercase block mb-1">Nuevo Monto Corregido</label>
+                          <input 
+                              type="number"
+                              value={correctionAmount}
+                              onChange={e => setCorrectionAmount(e.target.value)}
+                              className="w-full bg-bar-900 border border-bar-700 rounded-lg p-3 text-bar-text text-xl font-bold focus:border-amber-500 outline-none"
+                              placeholder="0"
+                          />
+                      </div>
+                      <div>
+                          <label className="text-xs font-bold text-slate-300 uppercase block mb-1">Razón de la Corrección</label>
+                          <textarea 
+                              value={correctionReason}
+                              onChange={e => setCorrectionReason(e.target.value)}
+                              className="w-full bg-bar-900 border border-bar-700 rounded-lg p-3 text-bar-text h-24 resize-none focus:border-amber-500 outline-none"
+                              placeholder="Explica por qué necesitas corregir el valor..."
+                          />
+                      </div>
+                      <div className="flex gap-3 pt-2">
+                          <button 
+                              onClick={() => setShowCorrectionModal(false)}
+                              className="flex-1 py-3 bg-bar-700 text-slate-300 rounded-lg font-bold hover:bg-bar-600 transition-colors"
+                          >
+                              Cancelar
+                          </button>
+                          <button 
+                              onClick={handleRequestCorrection}
+                              disabled={isSubmittingCorrection || !correctionAmount || !correctionReason}
+                              className="flex-1 py-3 bg-amber-600 text-white rounded-lg font-bold hover:bg-amber-500 transition-colors disabled:opacity-50"
+                          >
+                              {isSubmittingCorrection ? 'Enviando...' : 'Enviar Solicitud'}
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
 
       {/* Permission notice */}
       {!canEdit && !activeSession && (
@@ -513,57 +865,131 @@ const Inventory: React.FC<InventoryProps> = ({ user }) => {
         </div>
 
         {!isInventoryCollapsed && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-bar-950 text-slate-400 text-sm uppercase tracking-wider">
-                  <th className="p-4">Producto</th>
-                  <th className="p-4">Categoría</th>
-                  {activeSession && <th className="p-4 text-center text-slate-300">Stock Inicial</th>}
-                  <th className="p-4 w-32 text-center">Cantidad Física</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-bar-700">
-                {filteredProducts.map(product => {
-                  const initialCount = activeSession?.initialInventory.find(i => i.productId === product.id)?.count;
-                  return (
-                    <tr key={product.id} className="hover:bg-bar-700/30 transition-colors">
-                      <td className="p-4 font-medium text-bar-text">{product.name}</td>
-                      <td className="p-4 text-slate-400 text-sm">{product.category}</td>
+          <div>
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left">
+                    <thead>
+                        <tr className="bg-bar-950 text-slate-500 text-[10px] font-black uppercase tracking-widest">
+                        <th className="p-5">Producto</th>
+                        <th className="p-5">Categoría</th>
+                        {activeSession && <th className="p-5 text-center text-slate-300">Stock Inicial</th>}
+                        <th className="p-5 w-40 text-center">Conteo Físico</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-bar-700/50">
+                        {filteredProducts.map(product => {
+                        const initialCount = activeSession?.initialInventory.find(i => i.productId === product.id)?.count;
+                        return (
+                            <tr key={product.id} className="hover:bg-bar-700/20 transition-colors">
+                                <td className="p-5 font-black text-bar-text uppercase tracking-tight">{product.name}</td>
+                                <td className="p-5">
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 bg-bar-900 px-2 py-1 rounded-lg">{product.category}</span>
+                                </td>
 
-                      {activeSession && (
-                        <td className="p-4 text-center text-slate-300 font-mono bg-bar-900/30">
-                          {initialCount}
-                        </td>
-                      )}
+                                {activeSession && (
+                                    <td className="p-5 text-center text-slate-300 font-mono text-lg">
+                                        {initialCount}
+                                    </td>
+                                )}
 
-                      <td className="p-4">
-                        <input
-                          type="number"
-                          min="0"
-                          disabled={!canEdit}
-                          value={inventoryInput[product.id] === undefined || inventoryInput[product.id] === 0 ? '' : inventoryInput[product.id]}
-                          onChange={(e) => handleInputChange(product.id, e.target.value)}
-                          className={`w-full bg-bar-900 border border-bar-600 rounded p-2 text-bar-text text-center font-bold focus:border-bar-500 focus:ring-1 focus:ring-bar-500 outline-none transition-all ${!canEdit
-                            ? 'opacity-40 cursor-not-allowed bg-bar-950 border-transparent'
-                            : canEditBaseInventory
-                              ? 'border-amber-500/50 focus:border-amber-500'
-                              : 'hover:border-bar-500'
-                            }`}
-                          placeholder="0"
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                                <td className="p-5">
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        disabled={!canEdit}
+                                        value={inventoryInput[product.id] === undefined || inventoryInput[product.id] === 0 ? '' : inventoryInput[product.id]}
+                                        onChange={(e) => handleInputChange(product.id, e.target.value)}
+                                        className={`w-full bg-bar-900 border-2 border-bar-700 rounded-xl p-3 text-bar-text text-center font-black text-xl focus:border-bar-500 outline-none transition-all ${!canEdit
+                                            ? 'opacity-40 cursor-not-allowed bg-bar-950 border-transparent'
+                                            : canEditBaseInventory
+                                            ? 'border-amber-500/30 focus:border-amber-500'
+                                            : 'hover:border-bar-600'
+                                        }`}
+                                        placeholder="0"
+                                    />
+                                </td>
+                            </tr>
+                        );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* Mobile Cards View */}
+            <div className="md:hidden divide-y divide-bar-700">
+                {filteredProducts.length === 0 ? (
+                    <div className="p-10 text-center text-slate-500 font-bold">No se encontraron productos.</div>
+                ) : (
+                    filteredProducts.map(product => {
+                        const initialCount = activeSession?.initialInventory.find(i => i.productId === product.id)?.count;
+                        return (
+                            <div key={product.id} className="p-5 space-y-4">
+                                <div className="flex justify-between items-start">
+                                    <div className="max-w-[60%]">
+                                        <h4 className="text-lg font-black text-bar-text uppercase tracking-tighter leading-tight">{product.name}</h4>
+                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-1 inline-block">{product.category}</span>
+                                    </div>
+                                    {activeSession && (
+                                        <div className="bg-bar-950 px-3 py-2 rounded-xl border border-bar-700 text-center min-w-[70px]">
+                                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">Inicial</p>
+                                            <p className="text-lg font-black text-bar-text font-mono">{initialCount}</p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="flex items-center gap-4 bg-bar-950/50 p-4 rounded-2xl border border-bar-700/50 shadow-inner">
+                                    <div className="flex-1">
+                                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Conteo Final (Físico)</p>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            disabled={!canEdit}
+                                            value={inventoryInput[product.id] === undefined || inventoryInput[product.id] === 0 ? '' : inventoryInput[product.id]}
+                                            onChange={(e) => handleInputChange(product.id, e.target.value)}
+                                            className="w-full bg-bar-900 border-2 border-bar-700 rounded-xl py-4 px-4 text-bar-text text-center font-black text-2xl focus:border-bar-500 outline-none transition-all disabled:opacity-30"
+                                            placeholder="0"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })
+                )}
+            </div>
           </div>
         )}
       </div>
 
       {/* ACTION AREA */}
-      <div className="bg-bar-800 rounded-xl border border-bar-700 p-6 shadow-xl space-y-4">
+      <div className="bg-bar-800 rounded-xl border border-bar-700 p-6 shadow-xl space-y-6">
+        
+        {activeSession && sessionMovements.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-4 border-b border-bar-700">
+            <div className="flex items-center justify-between p-3 bg-bar-900/50 rounded-xl border border-bar-700">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-500/10 rounded-lg text-emerald-500"><TrendingUp size={20} /></div>
+                <div>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase">Producción del Turno</p>
+                  <p className="text-xl font-black text-emerald-400">
+                    {formatCOP(sessionMovements.filter(m => m.type === 'PRODUCTION').reduce((acc, m) => acc + m.amount, 0))}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-between p-3 bg-bar-900/50 rounded-xl border border-bar-700">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-rose-500/10 rounded-lg text-rose-500"><TrendingDown size={20} /></div>
+                <div>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase">Pagos (Salida de Caja)</p>
+                  <p className="text-xl font-black text-rose-400">
+                    {formatCOP(sessionMovements.filter(m => m.type === 'PAYMENT' && m.source === 'CASH_DRAWER').reduce((acc, m) => acc + m.amount, 0))}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {activeSession && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -601,37 +1027,39 @@ const Inventory: React.FC<InventoryProps> = ({ user }) => {
             <button
               onClick={handleSaveProgress}
               disabled={processing}
-              className="flex items-center gap-2 text-emerald-400 hover:text-emerald-300 font-bold px-4 py-2 rounded-lg border border-emerald-500/30 hover:bg-emerald-500/10 transition-all disabled:opacity-50"
+              className="w-full md:w-auto flex items-center justify-center gap-3 text-emerald-400 hover:text-emerald-300 font-black uppercase tracking-widest px-6 py-5 md:py-3 rounded-2xl md:rounded-xl border border-emerald-500/30 hover:bg-emerald-500/10 transition-all disabled:opacity-50 shadow-xl shadow-emerald-950/20"
             >
-              <Save size={20} />
-              Guardar Progreso
+              <Save size={24} className="md:w-5 md:h-5" />
+              <span>Guardar Progreso</span>
             </button>
           )}
-          <div className="flex gap-4">
+          <div className="w-full md:w-auto flex flex-col md:flex-row gap-4">
             {!activeSession ? (
               canEdit ? (
                 <button
                   type="button"
                   onClick={handleStartShift}
                   disabled={processing}
-                  className="flex items-center gap-2 bg-bar-500 hover:bg-bar-400 text-bar-950 font-bold px-8 py-4 rounded-xl shadow-lg shadow-bar-500/20 transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full md:w-auto flex items-center justify-center gap-3 bg-bar-500 hover:bg-bar-400 text-bar-950 font-black uppercase tracking-tighter px-10 py-6 md:py-4 rounded-3xl md:rounded-xl shadow-2xl shadow-bar-500/20 transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed text-lg md:text-base"
                 >
-                  {processing ? <Loader2 size={24} className="animate-spin" /> : <Play size={24} />}
-                  {processing ? 'Iniciando...' : 'Iniciar Turno'}
+                  {processing ? <Loader2 size={28} className="animate-spin" /> : <Play size={28} />}
+                  <span>{processing ? 'Iniciando...' : 'Iniciar Turno'}</span>
                 </button>
               ) : (
-                <span className="text-slate-500 text-sm italic py-2">Esperando apertura por administrador...</span>
+                <div className="text-slate-500 text-sm font-black uppercase tracking-widest italic py-4 text-center">Esperando apertura por administrador...</div>
               )
             ) : (
-              <button
-                type="button"
-                onClick={handleEndShift}
-                disabled={processing || !realCash}
-                className="flex items-center gap-2 bg-rose-600 hover:bg-rose-500 text-white font-bold px-8 py-4 rounded-xl shadow-lg shadow-rose-600/20 transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {processing ? <Loader2 size={24} className="animate-spin" /> : <Square size={24} fill="currentColor" />}
-                {processing ? 'Cerrando...' : 'Cerrar Turno'}
-              </button>
+              <div className="fixed bottom-0 left-0 right-0 md:static p-4 md:p-0 bg-bar-950/90 md:bg-transparent backdrop-blur-xl md:backdrop-blur-none border-t md:border-t-0 border-bar-700 md:border-transparent z-[50] flex flex-col md:flex-row gap-4">
+                <button
+                    type="button"
+                    onClick={handleEndShift}
+                    disabled={processing || !realCash}
+                    className="w-full md:w-auto flex items-center justify-center gap-4 bg-rose-600 hover:bg-rose-500 text-white font-black uppercase tracking-tighter px-12 py-6 md:py-4 rounded-3xl md:rounded-xl shadow-2xl shadow-rose-900/30 transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed text-xl md:text-base"
+                >
+                    {processing ? <Loader2 size={32} className="animate-spin" /> : <Square size={32} fill="currentColor" />}
+                    <span>{processing ? 'Cerrando...' : 'Cerrar Turno'}</span>
+                </button>
+              </div>
             )}
           </div>
         </div>

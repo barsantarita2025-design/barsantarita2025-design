@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { getCreditCustomers, saveCreditCustomer, registerCreditTransaction, registerPaymentTransaction, getCustomerHistory } from '../services/db';
-import { CreditCustomer, CreditTransaction, User, PaymentMethod } from '../types';
+import { getCreditCustomers, saveCreditCustomer, registerCreditTransaction, registerPaymentTransaction, getCustomerHistory, getActiveSession } from '../services/db';
+import { CreditCustomer, CreditTransaction, User, PaymentMethod, ShiftSession } from '../types';
 import {
     Plus, Edit2, Search, DollarSign,
     AlertTriangle, Lock, History, CheckCircle, X, Check, Wallet, Banknote, ArrowDownCircle, ArrowUpCircle
@@ -24,6 +24,8 @@ const CreditCustomers: React.FC<Props> = ({ user }) => {
     // Selection state
     const [selectedCustomer, setSelectedCustomer] = useState<CreditCustomer | null>(null);
     const [history, setHistory] = useState<CreditTransaction[]>([]);
+    const [activeSession, setActiveSession] = useState<ShiftSession | null>(null);
+    const [selectedOriginalDebt, setSelectedOriginalDebt] = useState<CreditTransaction | null>(null);
 
     // Form states (Customer)
     const [cName, setCName] = useState('');
@@ -46,7 +48,13 @@ const CreditCustomers: React.FC<Props> = ({ user }) => {
 
     useEffect(() => {
         loadCustomers();
+        loadActiveSession();
     }, []);
+
+    const loadActiveSession = async () => {
+        const session = await getActiveSession();
+        setActiveSession(session);
+    };
 
     const loadCustomers = async () => {
         setLoading(true);
@@ -141,7 +149,7 @@ const CreditCustomers: React.FC<Props> = ({ user }) => {
         }
 
         try {
-            await registerCreditTransaction(selectedCustomer.id, amount, fObs, user);
+            await registerCreditTransaction(selectedCustomer.id, amount, fObs, user, activeSession?.id);
             setIsFiaoModalOpen(false);
             loadCustomers();
             alert(`✅ Fiao registrado exitosamente por $${amount.toLocaleString()}`);
@@ -152,11 +160,17 @@ const CreditCustomers: React.FC<Props> = ({ user }) => {
 
     // --- PAYMENT LOGIC ---
 
-    const handleOpenPaymentModal = (customer: CreditCustomer) => {
+    const handleOpenPaymentModal = (customer: CreditCustomer, originalDebt?: CreditTransaction) => {
         setSelectedCustomer(customer);
-        setPAmount('');
+        setSelectedOriginalDebt(originalDebt || null);
+        if (originalDebt) {
+            setPAmount(originalDebt.amount.toString());
+            setPObs(`Abono a deuda del ${new Date(originalDebt.date).toLocaleDateString()}`);
+        } else {
+            setPAmount('');
+            setPObs('');
+        }
         setPMethod('CASH');
-        setPObs('');
         setPError('');
         setIsPaymentModalOpen(true);
     };
@@ -172,7 +186,15 @@ const CreditCustomers: React.FC<Props> = ({ user }) => {
         }
 
         try {
-            await registerPaymentTransaction(selectedCustomer.id, amount, pMethod, pObs, user);
+            await registerPaymentTransaction(
+                selectedCustomer.id, 
+                amount, 
+                pMethod, 
+                pObs, 
+                user, 
+                activeSession?.id, 
+                selectedOriginalDebt?.shiftSessionId || selectedOriginalDebt?.originalShiftSessionId
+            );
             setIsPaymentModalOpen(false);
             loadCustomers();
             alert(`✅ Abono registrado exitosamente por $${amount.toLocaleString()}`);
@@ -198,16 +220,16 @@ const CreditCustomers: React.FC<Props> = ({ user }) => {
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h2 className="text-3xl font-bold text-bar-text">Clientes Autorizados (Fiao)</h2>
-                    <p className="text-slate-400">Gestión de cuentas por cobrar y abonos</p>
+                <div className="w-full">
+                    <h2 className="text-2xl md:text-3xl font-black text-bar-text uppercase tracking-tight">Clientes Autorizados (Fiao)</h2>
+                    <p className="text-slate-400 text-sm">Gestión de cuentas por cobrar y abonos</p>
                 </div>
                 {user.role === 'ADMIN' && (
                     <button
                         onClick={() => handleOpenCustomerModal()}
-                        className="bg-bar-500 hover:bg-bar-400 text-bar-950 font-bold px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-lg shadow-bar-500/20"
+                        className="w-full md:w-auto bg-bar-500 hover:bg-bar-400 text-bar-950 font-black px-6 py-4 md:py-2 rounded-2xl md:rounded-lg flex items-center justify-center gap-2 transition-colors shadow-xl md:shadow-lg shadow-bar-500/20"
                     >
-                        <Plus size={20} />
+                        <Plus size={24} className="md:w-5 md:h-5" />
                         Nuevo Cliente
                     </button>
                 )}
@@ -226,83 +248,83 @@ const CreditCustomers: React.FC<Props> = ({ user }) => {
             </div>
 
             {/* Customers Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                 {filteredCustomers.map(customer => {
                     const status = getStatusText(customer.currentUsed, customer.maxLimit);
                     const percentage = Math.min((customer.currentUsed / customer.maxLimit) * 100, 100);
                     const colorClass = getStatusColor(customer.currentUsed, customer.maxLimit);
 
                     return (
-                        <div key={customer.id} className={`bg-bar-800 rounded-xl border ${status.blocked ? 'border-rose-900' : 'border-bar-700'} shadow-lg overflow-hidden relative`}>
+                        <div key={customer.id} className={`bg-bar-800 rounded-2xl border-2 ${status.blocked ? 'border-rose-900/50' : 'border-bar-700/50'} shadow-xl overflow-hidden relative transition-all active:scale-[0.98]`}>
                             {!customer.active && (
                                 <div className="absolute inset-0 bg-bar-950/80 flex items-center justify-center z-10 backdrop-blur-sm">
-                                    <span className="bg-slate-700 text-slate-300 px-3 py-1 rounded-full text-sm font-bold">INACTIVO</span>
+                                    <span className="bg-slate-700 text-slate-300 px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest">INACTIVO</span>
                                 </div>
                             )}
 
-                            <div className="p-5">
-                                <div className="flex justify-between items-start mb-2">
-                                    <div>
-                                        <h3 className="text-lg font-bold text-bar-text truncate">{customer.name}</h3>
-                                        {customer.documentId && <p className="text-xs text-slate-500">ID: {customer.documentId}</p>}
+                            <div className="p-5 md:p-6">
+                                <div className="flex justify-between items-start mb-3">
+                                    <div className="max-w-[70%]">
+                                        <h3 className="text-xl font-black text-bar-text truncate uppercase tracking-tight">{customer.name}</h3>
+                                        {customer.documentId && <p className="text-[10px] text-slate-500 font-bold tracking-widest mt-0.5">ID: {customer.documentId}</p>}
                                     </div>
-                                    <div className="flex gap-1">
-                                        <button onClick={() => handleViewHistory(customer)} className="p-2 text-slate-500 hover:text-blue-400 hover:bg-blue-900/30 rounded-lg transition-colors" title="Ver Historial">
-                                            <History size={16} />
+                                    <div className="flex gap-2">
+                                        <button onClick={() => handleViewHistory(customer)} className="p-3 bg-bar-900/50 text-slate-400 hover:text-blue-400 rounded-xl transition-colors" title="Ver Historial">
+                                            <History size={20} />
                                         </button>
                                         {user.role === 'ADMIN' && (
-                                            <button onClick={() => handleOpenCustomerModal(customer)} className="p-2 text-slate-500 hover:text-bar-text hover:bg-bar-700 rounded-lg transition-colors" title="Editar Cliente">
-                                                <Edit2 size={16} />
+                                            <button onClick={() => handleOpenCustomerModal(customer)} className="p-3 bg-bar-900/50 text-slate-400 hover:text-bar-text rounded-xl transition-colors" title="Editar Cliente">
+                                                <Edit2 size={20} />
                                             </button>
                                         )}
                                     </div>
                                 </div>
 
                                 {/* Status Indicator */}
-                                <div className="flex items-center gap-2 mb-4">
-                                    <span className={`w-2.5 h-2.5 rounded-full ${colorClass} ${status.blocked ? 'animate-pulse' : ''}`} />
-                                    <span className={`text-xs font-bold tracking-wide ${status.color}`}>
-                                        {status.text} {status.blocked && "- CUPO LLENO"}
+                                <div className="flex items-center gap-2 mb-5">
+                                    <span className={`w-3 h-3 rounded-full ${colorClass} ${status.blocked ? 'animate-pulse' : ''}`} />
+                                    <span className={`text-[10px] font-black tracking-widest uppercase ${status.color}`}>
+                                        {status.text} {status.blocked && "- Cupo Agotado"}
                                     </span>
                                 </div>
 
                                 {/* Credit Bar */}
-                                <div className="space-y-1 mb-4">
-                                    <div className="flex justify-between text-xs font-medium text-slate-400">
-                                        <span>Usado: ${customer.currentUsed.toLocaleString()}</span>
-                                        <span>Max: ${customer.maxLimit.toLocaleString()}</span>
+                                <div className="space-y-2 mb-6 bg-bar-900/30 p-4 rounded-xl border border-bar-700/30">
+                                    <div className="flex justify-between text-[10px] font-black text-slate-500 uppercase">
+                                        <span>Usado: {customer.currentUsed.toLocaleString()}</span>
+                                        <span>Cupo: {customer.maxLimit.toLocaleString()}</span>
                                     </div>
-                                    <div className="h-2 w-full bg-bar-900 rounded-full overflow-hidden">
+                                    <div className="h-3 w-full bg-bar-950 rounded-full overflow-hidden border border-bar-700/20">
                                         <div
-                                            className={`h-full ${colorClass} transition-all duration-500`}
+                                            className={`h-full ${colorClass} transition-all duration-700 ease-out`}
                                             style={{ width: `${percentage}%` }}
                                         />
                                     </div>
-                                    <div className="text-right text-xs text-slate-500">
-                                        Disponible: <span className="text-bar-text font-mono">${(customer.maxLimit - customer.currentUsed).toLocaleString()}</span>
+                                    <div className="text-right text-xs font-black text-bar-text font-mono">
+                                        DISP: ${(customer.maxLimit - customer.currentUsed).toLocaleString()}
                                     </div>
                                 </div>
 
                                 {/* Actions */}
-                                <div className="grid grid-cols-2 gap-3 mt-4">
+                                <div className="grid grid-cols-2 gap-4 mt-2">
                                     <button
                                         onClick={() => handleOpenPaymentModal(customer)}
                                         disabled={!customer.active}
-                                        className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-bar-text py-2 rounded-lg text-sm font-bold transition-colors shadow-lg shadow-emerald-600/20 disabled:opacity-50"
+                                        className="flex flex-col items-center justify-center gap-1 bg-emerald-600 hover:bg-emerald-500 text-white py-4 rounded-2xl text-xs font-black uppercase transition-all shadow-lg shadow-emerald-900/20 disabled:opacity-50"
                                     >
-                                        <Banknote size={16} />
+                                        <Banknote size={24} />
                                         Abonar
                                     </button>
 
                                     <button
                                         onClick={() => handleOpenFiaoModal(customer)}
                                         disabled={status.blocked || !customer.active}
-                                        className={`flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold transition-colors shadow-lg ${status.blocked || !customer.active
-                                                ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                                        className={`flex flex-col items-center justify-center gap-1 py-4 rounded-2xl text-xs font-black uppercase transition-all shadow-lg ${status.blocked || !customer.active
+                                                ? 'bg-bar-900 text-slate-600 border border-bar-700'
                                                 : 'bg-bar-500 hover:bg-bar-400 text-bar-950 shadow-bar-500/20'
                                             }`}
                                     >
-                                        {status.blocked ? <Lock size={16} /> : <Wallet size={16} />}
+                                        {status.blocked ? <Lock size={24} /> : <Wallet size={24} />}
                                         Fiar
                                     </button>
                                 </div>
@@ -314,17 +336,17 @@ const CreditCustomers: React.FC<Props> = ({ user }) => {
 
             {/* --- MODAL: CREATE / EDIT CUSTOMER (ADMIN) --- */}
             {isCustomerModalOpen && (
-                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-bar-800 w-full max-w-lg rounded-2xl border border-bar-600 shadow-2xl">
-                        <div className="p-6 border-b border-bar-700 flex justify-between items-center">
-                            <h3 className="text-xl font-bold text-bar-text">
-                                {selectedCustomer ? 'Editar Cliente' : 'Nuevo Cliente Autorizado'}
+                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end md:items-center justify-center md:p-4">
+                    <div className="bg-bar-800 w-full md:max-w-lg h-full md:h-auto rounded-t-3xl md:rounded-2xl border-t md:border border-bar-600 shadow-2xl flex flex-col">
+                        <div className="p-6 border-b border-bar-700 flex justify-between items-center shrink-0">
+                            <h3 className="text-xl font-black text-bar-text uppercase tracking-tight">
+                                {selectedCustomer ? 'Editar Cliente' : 'Nuevo Cliente'}
                             </h3>
-                            <button onClick={() => setIsCustomerModalOpen(false)} className="text-slate-400 hover:text-bar-text">
+                            <button onClick={() => setIsCustomerModalOpen(false)} className="p-2 bg-bar-900/50 rounded-xl text-slate-400 hover:text-bar-text">
                                 <X size={24} />
                             </button>
                         </div>
-                        <form onSubmit={handleSaveCustomer} className="p-6 space-y-4">
+                        <form onSubmit={handleSaveCustomer} className="p-6 space-y-5 overflow-y-auto flex-1">
                             <div>
                                 <label className="block text-sm font-medium text-slate-300 mb-1">Nombre Completo *</label>
                                 <input required type="text" value={cName} onChange={e => setCName(e.target.value)} className="w-full bg-bar-900 border border-bar-600 rounded p-2.5 text-bar-text focus:border-bar-500 outline-none" />
@@ -374,13 +396,14 @@ const CreditCustomers: React.FC<Props> = ({ user }) => {
 
             {/* --- MODAL: REGISTER FIAO (EMPLOYEE/ADMIN) --- */}
             {isFiaoModalOpen && selectedCustomer && (
-                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-bar-800 w-full max-w-md rounded-2xl border border-bar-600 shadow-2xl">
-                        <div className="p-6 bg-bar-900/50 border-b border-bar-700">
-                            <h3 className="text-xl font-bold text-bar-text mb-1">Registrar Fiao</h3>
-                            <p className="text-slate-400 text-sm">Cliente: <span className="text-bar-text font-semibold">{selectedCustomer.name}</span></p>
+                <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-end md:items-center justify-center md:p-4">
+                    <div className="bg-bar-800 w-full md:max-w-md h-[95vh] md:h-auto rounded-t-[3rem] md:rounded-3xl border-t md:border border-bar-600 shadow-2xl flex flex-col overflow-hidden">
+                        <div className="p-8 md:p-6 bg-bar-900/50 border-b border-bar-700 text-center md:text-left shrink-0">
+                            <div className="w-12 h-1.5 bg-bar-700 rounded-full mx-auto mb-6 md:hidden" />
+                            <h3 className="text-2xl md:text-xl font-black text-bar-text mb-1 uppercase tracking-tighter">Registrar Fiao</h3>
+                            <p className="text-slate-400 text-sm font-bold uppercase tracking-widest">{selectedCustomer.name}</p>
                         </div>
-                        <form onSubmit={handleSaveFiao} className="p-6 space-y-6">
+                        <form onSubmit={handleSaveFiao} className="p-8 md:p-6 space-y-6 overflow-y-auto flex-1 no-scrollbar">
                             <div className="bg-bar-900 p-4 rounded-xl border border-bar-700">
                                 <div className="flex justify-between text-sm text-slate-400 mb-2">
                                     <span>Cupo Máximo:</span>
@@ -454,13 +477,14 @@ const CreditCustomers: React.FC<Props> = ({ user }) => {
 
             {/* --- MODAL: REGISTER PAYMENT (ABONO) --- */}
             {isPaymentModalOpen && selectedCustomer && (
-                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-bar-800 w-full max-w-md rounded-2xl border border-bar-600 shadow-2xl">
-                        <div className="p-6 bg-emerald-900/30 border-b border-bar-700">
-                            <h3 className="text-xl font-bold text-bar-text mb-1">Registrar Abono</h3>
-                            <p className="text-slate-400 text-sm">Cliente: <span className="text-bar-text font-semibold">{selectedCustomer.name}</span></p>
+                <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-end md:items-center justify-center md:p-4">
+                    <div className="bg-bar-800 w-full md:max-w-md h-[95vh] md:h-auto rounded-t-[3rem] md:rounded-3xl border-t md:border border-bar-600 shadow-2xl flex flex-col overflow-hidden">
+                        <div className="p-8 md:p-6 bg-emerald-950/20 border-b border-bar-700 text-center md:text-left shrink-0">
+                            <div className="w-12 h-1.5 bg-bar-700 rounded-full mx-auto mb-6 md:hidden" />
+                            <h3 className="text-2xl md:text-xl font-black text-emerald-400 mb-1 uppercase tracking-tighter">Registrar Abono</h3>
+                            <p className="text-slate-400 text-sm font-bold uppercase tracking-widest">{selectedCustomer.name}</p>
                         </div>
-                        <form onSubmit={handleSavePayment} className="p-6 space-y-6">
+                        <form onSubmit={handleSavePayment} className="p-8 md:p-6 space-y-6 overflow-y-auto flex-1 no-scrollbar">
                             <div className="bg-bar-900 p-4 rounded-xl border border-bar-700 flex justify-between items-center">
                                 <span className="text-slate-400">Deuda Actual:</span>
                                 <span className="text-xl font-bold text-bar-text">${selectedCustomer.currentUsed.toLocaleString()}</span>
@@ -551,19 +575,61 @@ const CreditCustomers: React.FC<Props> = ({ user }) => {
 
             {/* --- MODAL: HISTORY --- */}
             {isHistoryModalOpen && selectedCustomer && (
-                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-bar-800 w-full max-w-3xl rounded-2xl border border-bar-600 shadow-2xl flex flex-col max-h-[90vh]">
-                        <div className="p-6 border-b border-bar-700 flex justify-between items-center">
+                <div className="fixed inset-0 z-[110] bg-black/95 backdrop-blur-md flex items-end md:items-center justify-center md:p-4">
+                    <div className="bg-bar-800 w-full md:max-w-3xl h-full md:h-[90vh] md:rounded-3xl border-t md:border border-bar-600 shadow-2xl flex flex-col">
+                        <div className="p-8 md:p-6 border-b border-bar-700 flex justify-between items-center shrink-0">
                             <div>
-                                <h3 className="text-xl font-bold text-white">Movimientos</h3>
-                                <p className="text-sm text-slate-400">Cliente: {selectedCustomer.name}</p>
+                                <h3 className="text-2xl md:text-xl font-black text-white uppercase tracking-tighter">Historial de Cuenta</h3>
+                                <p className="text-sm text-slate-500 font-bold uppercase">{selectedCustomer.name}</p>
                             </div>
-                            <button onClick={() => setIsHistoryModalOpen(false)} className="text-slate-400 hover:text-white">
-                                <X size={24} />
+                            <button onClick={() => setIsHistoryModalOpen(false)} className="p-3 bg-bar-900/50 rounded-2xl text-slate-400 hover:text-white">
+                                <X size={28} />
                             </button>
                         </div>
-                        <div className="overflow-y-auto p-0 flex-1">
-                            <table className="w-full text-left text-sm">
+                        <div className="overflow-y-auto flex-1 no-scrollbar">
+                            {/* Mobile View: Transaction Cards */}
+                            <div className="md:hidden p-4 space-y-4">
+                                {history.length === 0 ? (
+                                    <p className="text-center text-slate-500 py-10">No hay movimientos.</p>
+                                ) : (
+                                    history.map(h => (
+                                        <div key={h.id} className="bg-bar-900/50 p-5 rounded-2xl border border-bar-700/50">
+                                            <div className="flex justify-between items-start mb-3">
+                                                {h.type === 'DEBT' ? (
+                                                    <span className="flex items-center gap-1.5 text-rose-400 font-black text-[10px] bg-rose-950/30 px-3 py-1.5 rounded-lg border border-rose-500/20 uppercase tracking-widest">
+                                                        <ArrowUpCircle size={14} /> Consumo
+                                                    </span>
+                                                ) : (
+                                                    <span className="flex items-center gap-1.5 text-emerald-400 font-black text-[10px] bg-emerald-950/30 px-3 py-1.5 rounded-lg border border-emerald-500/20 uppercase tracking-widest">
+                                                        <ArrowDownCircle size={14} /> Abono
+                                                    </span>
+                                                )}
+                                                <span className={`text-lg font-black font-mono ${h.type === 'DEBT' ? 'text-rose-400' : 'text-emerald-400'}`}>
+                                                    {h.type === 'DEBT' ? '+' : '-'}${h.amount.toLocaleString()}
+                                                </span>
+                                            </div>
+                                            <p className="text-slate-300 text-sm mb-4 leading-relaxed italic">"{h.observation || 'Sin detalle'}"</p>
+                                            <div className="flex justify-between items-end border-t border-bar-700/50 pt-3">
+                                                <div className="text-[10px] text-slate-500 font-bold uppercase">
+                                                    <div>{new Date(h.date).toLocaleDateString()} {new Date(h.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                                    <div className="text-bar-500 mt-0.5">{h.employeeName}</div>
+                                                </div>
+                                                {h.type === 'DEBT' && (
+                                                    <button 
+                                                        onClick={() => handleOpenPaymentModal(selectedCustomer, h)}
+                                                        className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest"
+                                                    >
+                                                        Pagar Esta
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+
+                            {/* Desktop View: Table */}
+                            <table className="hidden md:table w-full text-left text-sm">
                                 <thead className="bg-bar-950 text-slate-400 sticky top-0">
                                     <tr>
                                         <th className="p-4">Tipo</th>
@@ -573,40 +639,41 @@ const CreditCustomers: React.FC<Props> = ({ user }) => {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-bar-700">
-                                    {history.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={4} className="p-8 text-center text-slate-500">No hay registros.</td>
+                                    {history.map(h => (
+                                        <tr key={h.id} className="hover:bg-bar-700/30 transition-colors">
+                                            <td className="p-4">
+                                                {h.type === 'DEBT' ? (
+                                                    <span className="flex items-center gap-1 text-rose-400 font-bold text-xs bg-rose-900/20 px-2 py-1 rounded w-fit">
+                                                        <ArrowUpCircle size={14} /> Consumo
+                                                    </span>
+                                                ) : (
+                                                    <span className="flex items-center gap-1 text-emerald-400 font-bold text-xs bg-emerald-900/20 px-2 py-1 rounded w-fit">
+                                                        <ArrowDownCircle size={14} /> Abono
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="p-4 text-slate-300 max-w-xs">
+                                                <p className="line-clamp-2 italic">"{h.observation || '-'}"</p>
+                                            </td>
+                                            <td className="p-4 text-slate-400 text-xs">
+                                                <div>{new Date(h.date).toLocaleDateString()} {new Date(h.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                                <div className="text-slate-500 uppercase font-bold text-[10px]">{h.employeeName}</div>
+                                            </td>
+                                            <td className={`p-4 text-right font-bold ${h.type === 'DEBT' ? 'text-rose-400' : 'text-emerald-400'}`}>
+                                                <div className="flex flex-col items-end gap-2">
+                                                    <span className="text-lg font-mono">{h.type === 'DEBT' ? '+' : '-'}${h.amount.toLocaleString()}</span>
+                                                    {h.type === 'DEBT' && (
+                                                        <button 
+                                                            onClick={() => handleOpenPaymentModal(selectedCustomer, h)}
+                                                            className="text-[10px] bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 rounded-lg font-black uppercase tracking-widest transition-colors"
+                                                        >
+                                                            Pagar Deuda
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
                                         </tr>
-                                    ) : (
-                                        history.map(h => (
-                                            <tr key={h.id} className="hover:bg-bar-700/30">
-                                                <td className="p-4">
-                                                    {h.type === 'DEBT' ? (
-                                                        <span className="flex items-center gap-1 text-rose-400 font-bold text-xs bg-rose-900/20 px-2 py-1 rounded w-fit">
-                                                            <ArrowUpCircle size={14} /> FIAO
-                                                        </span>
-                                                    ) : (
-                                                        <span className="flex items-center gap-1 text-emerald-400 font-bold text-xs bg-emerald-900/20 px-2 py-1 rounded w-fit">
-                                                            <ArrowDownCircle size={14} /> PAGO
-                                                        </span>
-                                                    )}
-                                                    {h.type === 'PAYMENT' && h.paymentMethod && (
-                                                        <div className="text-[10px] text-slate-500 mt-1 uppercase">{h.paymentMethod === 'CASH' ? 'Efectivo' : h.paymentMethod}</div>
-                                                    )}
-                                                </td>
-                                                <td className="p-4 text-slate-300 max-w-xs">
-                                                    <p className="line-clamp-2">{h.observation || '-'}</p>
-                                                </td>
-                                                <td className="p-4 text-slate-400 text-xs">
-                                                    <div>{new Date(h.date).toLocaleDateString()} {new Date(h.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-                                                    <div className="text-slate-500">{h.employeeName}</div>
-                                                </td>
-                                                <td className={`p-4 text-right font-bold ${h.type === 'DEBT' ? 'text-rose-400' : 'text-emerald-400'}`}>
-                                                    {h.type === 'DEBT' ? '+' : '-'}${h.amount.toLocaleString()}
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )}
+                                    ))}
                                 </tbody>
                             </table>
                         </div>

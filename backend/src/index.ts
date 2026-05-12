@@ -47,6 +47,10 @@ const parseBody = (body: any) => {
 };
 
 // --- Health Check ---
+app.get('/', (req, res) => {
+  res.json({ status: 'ok', message: 'BarFlow API is running. use /api/... for endpoints' });
+});
+
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'BarFlow API is running' });
 });
@@ -231,13 +235,15 @@ app.get('/api/credit/customers/:id/history', async (req, res) => {
 app.post('/api/credit/customers/:id/transactions', async (req, res) => {
   try {
     const body = parseBody(req.body);
-    const { amount, type, ...data } = body;
+    const { amount, type, shiftSessionId, originalShiftSessionId, ...data } = body;
     const transaction = await prisma.$transaction(async (tx) => {
       const t = await tx.creditTransaction.create({
         data: {
           ...data,
           amount,
           type,
+          shiftSessionId: shiftSessionId || null,
+          originalShiftSessionId: originalShiftSessionId || null,
           customerId: req.params.id,
           date: new Date()
         }
@@ -313,12 +319,369 @@ app.get('/api/accounting/payroll', async (req, res) => {
   }
 });
 
+app.post('/api/accounting/payroll', async (req, res) => {
+  try {
+    const data = parseBody(req.body);
+    // Remove id and potential relation objects
+    const { id, employee, ...cleanData } = data;
+    const shift = await prisma.workShift.create({
+      data: {
+        ...cleanData,
+        date: new Date(cleanData.date),
+        hoursWorked: Number(cleanData.hoursWorked),
+        hourlyRate: Number(cleanData.hourlyRate),
+        surcharges: Number(cleanData.surcharges),
+        totalPay: Number(cleanData.totalPay),
+        status: cleanData.status || 'PENDING'
+      }
+    });
+    res.json(shift);
+  } catch (error) {
+    console.error('Error creating work shift:', error);
+    res.status(500).json({ error: 'Error creating work shift' });
+  }
+});
+
+app.put('/api/accounting/payroll/:id', async (req, res) => {
+  try {
+    const data = parseBody(req.body);
+    const { id, employee, ...updateData } = data;
+
+    let finalData = { ...updateData };
+
+    if (updateData.status === 'APPROVED') {
+      // 1. Get current shift and config
+      const [currentShift, config] = await Promise.all([
+        prisma.workShift.findUnique({ where: { id: req.params.id } }),
+        prisma.payrollConfig.findFirst()
+      ]);
+
+      if (currentShift && config) {
+        const date = new Date(currentShift.date);
+        const day = date.getUTCDay(); // 0: Sunday, 6: Saturday
+        const isWeekend = day === 0 || day === 6;
+        const baseRate = isWeekend ? config.weekendRate : config.weekdayRate;
+
+        // Parse times
+        const [startH, startM] = currentShift.startTime.split(':').map(Number);
+        const [endH, endM] = currentShift.endTime.split(':').map(Number);
+        const startInMinutes = startH * 60 + startM;
+        let endInMinutes = endH * 60 + endM;
+
+        let normalMinutes = 0;
+        let overnightMinutes = 0;
+
+        if (endInMinutes < startInMinutes) {
+          // Crosses midnight (e.g., 22:00 to 02:00)
+          normalMinutes = 1440 - startInMinutes; // Minutes until midnight
+          overnightMinutes = endInMinutes;      // Minutes after midnight
+        } else {
+          // Same day (e.g., 18:00 to 23:00 OR 01:00 to 05:00)
+          // If the shift is entirely after midnight (before 6am)
+          if (startInMinutes < 360) {
+            overnightMinutes = endInMinutes - startInMinutes;
+          } else {
+            normalMinutes = endInMinutes - startInMinutes;
+          }
+        }
+
+        const calculatedTotal = (normalMinutes / 60) * baseRate + (overnightMinutes / 60) * config.overnightRate;
+        const totalWithSurcharges = calculatedTotal + (Number(updateData.surcharges) || 0);
+
+        finalData.hourlyRate = baseRate;
+        finalData.totalPay = Math.round(totalWithSurcharges);
+      }
+    }
+
+    const shift = await prisma.workShift.update({
+      where: { id: req.params.id },
+      data: {
+        ...finalData,
+        date: new Date(finalData.date)
+      }
+    });
+    res.json(shift);
+  } catch (error) {
+    console.error('Error updating work shift:', error);
+    res.status(500).json({ error: 'Error updating work shift' });
+  }
+});
+
+app.delete('/api/accounting/payroll/:id', async (req, res) => {
+  try {
+    await prisma.workShift.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting work shift:', error);
+    res.status(500).json({ error: 'Error deleting work shift' });
+  }
+});
+
 app.get('/api/accounting/purchases', async (req, res) => {
   try {
-    const purchases = await prisma.purchase.findMany();
+    const purchases = await prisma.purchase.findMany({
+      orderBy: { date: 'desc' }
+    });
     res.json(purchases);
   } catch (error) {
     res.status(500).json({ error: 'Error fetching purchases' });
+  }
+});
+
+app.post('/api/accounting/purchases', async (req, res) => {
+  try {
+    const data = parseBody(req.body);
+    const { id, ...cleanData } = data;
+    const purchase = await prisma.purchase.create({
+      data: {
+        ...cleanData,
+        date: new Date(cleanData.date),
+        quantity: Number(cleanData.quantity),
+        unitCost: Number(cleanData.unitCost),
+        totalCost: Number(cleanData.totalCost)
+      }
+    });
+    res.json(purchase);
+  } catch (error) {
+    console.error('Error creating purchase:', error);
+    res.status(500).json({ error: 'Error creating purchase' });
+  }
+});
+
+app.put('/api/accounting/purchases/:id', async (req, res) => {
+  try {
+    const data = parseBody(req.body);
+    const { id, ...updateData } = data;
+    const purchase = await prisma.purchase.update({
+      where: { id: req.params.id },
+      data: {
+        ...updateData,
+        date: new Date(updateData.date)
+      }
+    });
+    res.json(purchase);
+  } catch (error) {
+    console.error('Error updating purchase:', error);
+    res.status(500).json({ error: 'Error updating purchase' });
+  }
+});
+
+app.delete('/api/accounting/purchases/:id', async (req, res) => {
+  try {
+    await prisma.purchase.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting purchase:', error);
+    res.status(500).json({ error: 'Error deleting purchase' });
+  }
+});
+
+// --- Payroll Config ---
+app.get('/api/payroll-config', async (req, res) => {
+  try {
+    const payrollConfig = (prisma as any).payrollConfig;
+    if (!payrollConfig) {
+      console.warn('PayrollConfig model not available in Prisma client yet.');
+      return res.json({ weekdayRate: 0, weekendRate: 0, overnightRate: 0, updatedBy: 'System' });
+    }
+
+    let config = await payrollConfig.findFirst();
+    if (!config) {
+      return res.json({
+        weekdayRate: 0,
+        weekendRate: 0,
+        overnightRate: 0,
+        updatedBy: 'System'
+      });
+    }
+    res.json(config);
+  } catch (error) {
+    console.error('Error fetching payroll config:', error);
+    // If the table doesn't exist yet, don't crash
+    res.json({
+      weekdayRate: 0,
+      weekendRate: 0,
+      overnightRate: 0,
+      updatedBy: 'System'
+    });
+  }
+});
+
+app.post('/api/payroll-config', async (req, res) => {
+  try {
+    const payrollConfig = (prisma as any).payrollConfig;
+    if (!payrollConfig) {
+      return res.status(500).json({ error: 'PayrollConfig model not available in Prisma client' });
+    }
+
+    const data = parseBody(req.body);
+    const { weekdayRate, weekendRate, overnightRate, updatedBy } = data;
+    
+    const config = await payrollConfig.upsert({
+      where: { id: 'default-config' },
+      update: {
+        weekdayRate: Number(weekdayRate),
+        weekendRate: Number(weekendRate),
+        overnightRate: Number(overnightRate),
+        updatedBy,
+        updatedAt: new Date()
+      },
+      create: {
+        id: 'default-config',
+        weekdayRate: Number(weekdayRate),
+        weekendRate: Number(weekendRate),
+        overnightRate: Number(overnightRate),
+        updatedBy
+      }
+    });
+    res.json(config);
+  } catch (error) {
+    console.error('Error saving payroll config:', error);
+    res.status(500).json({ error: 'Error saving payroll config' });
+  }
+});
+
+// --- Financial Movements (Audit System) ---
+app.get('/api/financial-movements/pending-count', async (req, res) => {
+  try {
+    const count = await (prisma as any).financialMovement.count({
+      where: { status: 'PENDING' }
+    });
+    res.json({ count });
+  } catch (error) {
+    res.status(500).json({ error: 'Error fetching pending count' });
+  }
+});
+
+app.get('/api/financial-movements/pending', async (req, res) => {
+  try {
+    const movements = await (prisma as any).financialMovement.findMany({
+      where: { status: 'PENDING' },
+      orderBy: { date: 'desc' },
+      include: { employee: true }
+    });
+    res.json(movements);
+  } catch (error) {
+    res.status(500).json({ error: 'Error fetching pending movements' });
+  }
+});
+
+app.get('/api/financial-movements', async (req, res) => {
+  try {
+    const movements = await (prisma as any).financialMovement.findMany({
+      orderBy: { date: 'desc' },
+      include: { employee: true }
+    });
+    res.json(movements);
+  } catch (error) {
+    res.status(500).json({ error: 'Error fetching all movements' });
+  }
+});
+
+app.get('/api/financial-movements/session/:sessionId', async (req, res) => {
+  try {
+    const movements = await (prisma as any).financialMovement.findMany({
+      where: { 
+        sessionId: req.params.sessionId
+      }
+    });
+    res.json(movements);
+  } catch (error) {
+    res.status(500).json({ error: 'Error fetching session movements' });
+  }
+});
+
+app.post('/api/financial-movements', async (req, res) => {
+  try {
+    const data = parseBody(req.body);
+    const movement = await (prisma as any).financialMovement.create({
+      data: {
+        ...data,
+        date: new Date(data.date || new Date()),
+        status: 'PENDING'
+      }
+    });
+    res.json(movement);
+  } catch (error) {
+    console.error('Error creating financial movement:', error);
+    res.status(500).json({ error: 'Error creating financial movement' });
+  }
+});
+
+app.patch('/api/financial-movements/:id/status', async (req, res) => {
+  try {
+    const { status, approvedById, rejectionReason } = parseBody(req.body);
+    const movement = await (prisma as any).financialMovement.update({
+      where: { id: req.params.id },
+      data: {
+        status,
+        approvedById,
+        rejectionReason,
+        approvedAt: status === 'APPROVED' ? new Date() : null
+      }
+    });
+    res.json(movement);
+  } catch (error) {
+    res.status(500).json({ error: 'Error updating movement status' });
+  }
+});
+
+app.patch('/api/financial-movements/:id/request-correction', async (req, res) => {
+  try {
+    const { correctionRequestedAmount, correctionReason } = parseBody(req.body);
+    const current = await (prisma as any).financialMovement.findUnique({
+      where: { id: req.params.id }
+    });
+    
+    if (!current) {
+      return res.status(404).json({ error: 'Movement not found' });
+    }
+
+    const movement = await (prisma as any).financialMovement.update({
+      where: { id: req.params.id },
+      data: {
+        originalAmount: current.amount,
+        correctionRequestedAmount,
+        correctionReason,
+        correctionStatus: 'PENDING',
+        correctionRequestedAt: new Date()
+      }
+    });
+    res.json(movement);
+  } catch (error) {
+    console.error('Error requesting correction:', error);
+    res.status(500).json({ error: 'Error requesting correction' });
+  }
+});
+
+app.patch('/api/financial-movements/:id/approve-correction', async (req, res) => {
+  try {
+    const { status, approvedById } = parseBody(req.body);
+    const current = await (prisma as any).financialMovement.findUnique({
+      where: { id: req.params.id }
+    });
+
+    if (!current) {
+      return res.status(404).json({ error: 'Movement not found' });
+    }
+
+    const updateData: any = {
+      correctionStatus: status,
+      correctionApprovedById: approvedById
+    };
+
+    if (status === 'APPROVED') {
+      updateData.amount = current.correctionRequestedAmount;
+    }
+
+    const movement = await (prisma as any).financialMovement.update({
+      where: { id: req.params.id },
+      data: updateData
+    });
+    res.json(movement);
+  } catch (error) {
+    console.error('Error approving correction:', error);
+    res.status(500).json({ error: 'Error approving correction' });
   }
 });
 

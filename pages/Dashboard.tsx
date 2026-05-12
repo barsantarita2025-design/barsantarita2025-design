@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { getSessions, getActiveSession } from '../services/db';
-import { ShiftSession } from '../types';
-import { TrendingUp, DollarSign, Calendar, Clock } from 'lucide-react';
+import { getSessions, getActiveSession, getFinancialMovements } from '../services/db';
+import { ShiftSession, FinancialMovement } from '../types';
+import { TrendingUp, DollarSign, Calendar, Clock, TrendingDown } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 const Dashboard: React.FC = () => {
   const [activeSession, setActiveSession] = useState<ShiftSession | null>(null);
   const [pastSessions, setPastSessions] = useState<ShiftSession[]>([]);
+  const [movements, setMovements] = useState<FinancialMovement[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -14,8 +15,10 @@ const Dashboard: React.FC = () => {
       try {
         const active = await getActiveSession();
         const all = await getSessions();
+        const allMovements = await getFinancialMovements();
         setActiveSession(active);
         setPastSessions(all.slice(-7)); // Last 7 sessions
+        setMovements(allMovements);
       } catch (e) {
         console.error("Error loading dashboard data", e);
       } finally {
@@ -30,6 +33,16 @@ const Dashboard: React.FC = () => {
   // Calculate stats safely
   const totalRevenue = pastSessions.reduce((acc, s) => acc + (s.salesReport?.totalRevenue || 0), 0);
   const totalProfit = pastSessions.reduce((acc, s) => acc + (s.salesReport?.totalProfit || 0), 0);
+
+  // Calculate approved production
+  const totalProduction = movements
+    .filter(m => m.type === 'PRODUCTION' && m.status === 'APPROVED')
+    .reduce((acc, m) => acc + m.amount, 0);
+
+  // Calculate approved payments from cash drawer
+  const totalPayments = movements
+    .filter(m => m.type === 'PAYMENT' && m.status === 'APPROVED' && m.source === 'CASH_DRAWER')
+    .reduce((acc, m) => acc + m.amount, 0);
 
   // Prepare chart data with safety checks
   const chartData = pastSessions.map(s => {
@@ -52,8 +65,8 @@ const Dashboard: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="mb-6">
-        <h2 className="text-3xl font-bold text-bar-text">Resumen General</h2>
-        <p className="text-slate-400">Estado actual de la contabilidad</p>
+        <h2 className="text-2xl md:text-3xl font-black text-bar-text uppercase tracking-tight">Resumen General</h2>
+        <p className="text-slate-400 text-sm">Estado actual de la contabilidad</p>
       </div>
 
       {/* Active Shift Status */}
@@ -79,33 +92,53 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-bar-800 p-6 rounded-xl border border-bar-700">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+        <div className="bg-bar-800 p-5 md:p-6 rounded-2xl border border-bar-700 shadow-lg">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-slate-400 text-sm">Ventas (Últimos turnos)</span>
-            <DollarSign className="text-bar-500" size={20} />
+            <span className="text-slate-500 text-xs font-bold uppercase tracking-wider">Ventas (Últimos turnos)</span>
+            <DollarSign className="text-bar-500" size={18} />
           </div>
-          <p className="text-2xl font-bold text-bar-text">
+          <p className="text-2xl md:text-3xl font-black text-bar-text">
             ${totalRevenue.toLocaleString()}
           </p>
         </div>
 
-        <div className="bg-bar-800 p-6 rounded-xl border border-bar-700">
+        <div className="bg-bar-800 p-5 md:p-6 rounded-2xl border border-bar-700 shadow-lg">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-slate-400 text-sm">Ganancia Estimada</span>
-            <TrendingUp className="text-emerald-500" size={20} />
+            <span className="text-slate-500 text-xs font-bold uppercase tracking-wider">Ganancia Estimada</span>
+            <TrendingUp className="text-emerald-500" size={18} />
           </div>
-          <p className="text-2xl font-bold text-bar-text">
+          <p className="text-2xl md:text-3xl font-black text-emerald-400">
             ${totalProfit.toLocaleString()}
           </p>
         </div>
 
-        <div className="bg-bar-800 p-6 rounded-xl border border-bar-700">
+        <div className="bg-bar-800 p-5 md:p-6 rounded-2xl border border-bar-700 shadow-lg">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-slate-400 text-sm">Turnos Registrados</span>
-            <Calendar className="text-blue-500" size={20} />
+            <span className="text-slate-500 text-xs font-bold uppercase tracking-wider">Producción (Aprobada)</span>
+            <TrendingUp className="text-amber-500" size={18} />
           </div>
-          <p className="text-2xl font-bold text-bar-text">
+          <p className="text-2xl md:text-3xl font-black text-amber-500">
+            ${totalProduction.toLocaleString()}
+          </p>
+        </div>
+
+        <div className="bg-bar-800 p-5 md:p-6 rounded-2xl border border-bar-700 shadow-lg">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-slate-500 text-xs font-bold uppercase tracking-wider">Pagos Caja (Aprobados)</span>
+            <TrendingDown className="text-rose-400" size={18} />
+          </div>
+          <p className="text-2xl md:text-3xl font-black text-rose-400">
+            ${totalPayments.toLocaleString()}
+          </p>
+        </div>
+
+        <div className="bg-bar-800 p-5 md:p-6 rounded-2xl border border-bar-700 shadow-lg">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-slate-500 text-xs font-bold uppercase tracking-wider">Turnos Registrados</span>
+            <Calendar className="text-blue-500" size={18} />
+          </div>
+          <p className="text-2xl md:text-3xl font-black text-bar-text">
             {pastSessions.length}
           </p>
         </div>

@@ -1,4 +1,4 @@
-import { Product, User, ShiftSession, AppConfig, Role, CreditCustomer, CreditTransaction, PaymentMethod, AuditEntry, FixedExpense, WorkShift, Purchase } from '../types';
+import { Product, User, ShiftSession, AppConfig, Role, CreditCustomer, CreditTransaction, PaymentMethod, AuditEntry, FixedExpense, WorkShift, Purchase, FinancialMovement, FinancialMovementStatus } from '../types';
 import { STORAGE_KEYS, DEFAULT_ADMIN, DEFAULT_PRODUCTS } from '../constants';
 
 /**
@@ -258,18 +258,18 @@ export const getTransactionsInRange = async (startDateISO: string, endDateISO: s
 };
 
 // Transactional operation: Add Debt (Fiao)
-export const registerCreditTransaction = async (customerId: string, amount: number, observation: string, user: User): Promise<void> => {
+export const registerCreditTransaction = async (customerId: string, amount: number, observation: string, user: User, shiftSessionId?: string): Promise<void> => {
   await fetchAPI(`/credit/customers/${customerId}/transactions`, {
     method: 'POST',
-    body: JSON.stringify({ amount, observation, employeeId: user.id, employeeName: user.name, type: 'DEBT' }),
+    body: JSON.stringify({ amount, observation, employeeId: user.id, employeeName: user.name, type: 'DEBT', shiftSessionId }),
   });
 };
 
 // Transactional operation: Payment (Abono)
-export const registerPaymentTransaction = async (customerId: string, amount: number, method: PaymentMethod, observation: string, user: User): Promise<void> => {
+export const registerPaymentTransaction = async (customerId: string, amount: number, method: PaymentMethod, observation: string, user: User, shiftSessionId?: string, originalShiftSessionId?: string): Promise<void> => {
   await fetchAPI(`/credit/customers/${customerId}/transactions`, {
     method: 'POST',
-    body: JSON.stringify({ amount, observation, employeeId: user.id, employeeName: user.name, type: 'PAYMENT', paymentMethod: method }),
+    body: JSON.stringify({ amount, observation, employeeId: user.id, employeeName: user.name, type: 'PAYMENT', paymentMethod: method, shiftSessionId, originalShiftSessionId }),
   });
 };
 
@@ -323,6 +323,18 @@ export const deleteWorkShift = async (id: string): Promise<void> => {
   await fetchAPI(`/accounting/payroll/${id}`, { method: 'DELETE' });
 };
 
+// 2.1 Payroll Configuration
+export const getPayrollConfig = async (): Promise<any> => {
+  return fetchAPI('/payroll-config');
+};
+
+export const savePayrollConfig = async (config: any): Promise<void> => {
+  await fetchAPI('/payroll-config', {
+    method: 'POST',
+    body: JSON.stringify(config),
+  });
+};
+
 // 3. Purchases
 export const getPurchases = async (): Promise<Purchase[]> => {
   return fetchAPI('/accounting/purchases');
@@ -345,6 +357,60 @@ export const savePurchase = async (purchase: Purchase): Promise<void> => {
 
 export const deletePurchase = async (id: string): Promise<void> => {
   await fetchAPI(`/accounting/purchases/${id}`, { method: 'DELETE' });
+};
+
+// 4. Financial Movements
+export const getPendingFinancialMovements = async (): Promise<FinancialMovement[]> => {
+  return fetchAPI('/financial-movements/pending');
+};
+
+export const getPendingFinancialMovementsCount = async (): Promise<number> => {
+  const data = await fetchAPI('/financial-movements/pending-count');
+  return data.count;
+};
+
+export const getSessionFinancialMovements = async (sessionId: string): Promise<FinancialMovement[]> => {
+  return fetchAPI(`/financial-movements/session/${sessionId}`);
+};
+
+export const saveFinancialMovement = async (movement: Partial<FinancialMovement>): Promise<FinancialMovement> => {
+  return fetchAPI('/financial-movements', {
+    method: 'POST',
+    body: JSON.stringify(movement),
+  });
+};
+
+export const requestFinancialMovementCorrection = async (id: string, correctionRequestedAmount: number, correctionReason: string): Promise<void> => {
+  await fetchAPI(`/financial-movements/${id}/request-correction`, {
+    method: 'PATCH',
+    body: JSON.stringify({ correctionRequestedAmount, correctionReason }),
+  });
+};
+
+export const approveFinancialMovementCorrection = async (id: string, status: 'APPROVED' | 'REJECTED', approvedById: string): Promise<void> => {
+  await fetchAPI(`/financial-movements/${id}/approve-correction`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status, approvedById }),
+  });
+};
+
+export const updateFinancialMovementStatus = async (id: string, status: FinancialMovementStatus, adminId: string, rejectionReason?: string): Promise<void> => {
+  await fetchAPI(`/financial-movements/${id}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status, approvedById: adminId, rejectionReason }),
+  });
+};
+
+export const getFinancialMovements = async (): Promise<FinancialMovement[]> => {
+  return fetchAPI('/financial-movements');
+};
+
+export const approveFinancialMovement = async (id: string, adminId: string): Promise<void> => {
+  return updateFinancialMovementStatus(id, 'APPROVED', adminId);
+};
+
+export const rejectFinancialMovement = async (id: string, adminId: string, rejectionReason: string): Promise<void> => {
+  return updateFinancialMovementStatus(id, 'REJECTED', adminId, rejectionReason);
 };
 
 // --- Config ---

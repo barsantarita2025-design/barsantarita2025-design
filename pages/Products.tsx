@@ -155,100 +155,125 @@ const Products: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h2 className="text-3xl font-bold text-bar-text">Productos</h2>
-          <p className="text-slate-400">Gestiona el inventario y precios</p>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+        <div className="w-full">
+          <h2 className="text-2xl md:text-3xl font-black text-bar-text uppercase tracking-tight">Catálogo de Productos</h2>
+          <p className="text-slate-400 text-sm">Gestiona el inventario, categorías y precios de venta</p>
         </div>
-        <div className="flex gap-2">
+        <div className="w-full md:w-auto flex flex-col sm:flex-row gap-3">
           <button
             onClick={() => setIsCategoryModalOpen(true)}
-            className="bg-bar-700 hover:bg-bar-600 text-bar-text font-bold px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+            className="flex-1 md:flex-none bg-bar-800 hover:bg-bar-700 text-slate-300 border border-bar-700 font-black uppercase tracking-widest text-xs px-6 py-4 md:py-2.5 rounded-2xl md:rounded-xl flex items-center justify-center gap-3 transition-all active:scale-95"
           >
-            <FolderEdit size={20} />
+            <FolderEdit size={20} className="md:w-4 md:h-4" />
             Categorías
           </button>
           <button
             onClick={() => openModal()}
-            className="bg-bar-500 hover:bg-bar-400 text-bar-950 font-bold px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+            className="flex-1 md:flex-none bg-bar-500 hover:bg-bar-400 text-bar-950 font-black uppercase tracking-widest text-xs px-8 py-4 md:py-2.5 rounded-2xl md:rounded-xl flex items-center justify-center gap-3 transition-all shadow-xl shadow-bar-500/20 active:scale-95"
           >
-            <Plus size={20} />
+            <Plus size={24} className="md:w-5 md:h-5" />
             Nuevo Producto
           </button>
         </div>
       </div>
 
       {/* Search and Filter Bar */}
-      <div className="flex flex-col md:flex-row gap-4">
+      <div className="flex flex-col md:flex-row gap-4 bg-bar-800 p-4 md:p-0 md:bg-transparent rounded-2xl border border-bar-700/50 md:border-0 shadow-lg md:shadow-none">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar por nombre..."
-            className="w-full bg-bar-800 border border-bar-600 rounded-lg py-2.5 pl-10 pr-4 text-bar-text focus:outline-none focus:border-bar-500"
+            placeholder="Buscar por nombre o marca..."
+            className="w-full bg-bar-900 md:bg-bar-800 border border-bar-600 md:border-bar-700 rounded-xl md:rounded-lg py-3.5 md:py-2.5 pl-12 md:pl-10 pr-4 text-bar-text font-bold focus:outline-none focus:border-bar-500 transition-all"
           />
         </div>
         <select
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
-          className="bg-bar-800 border border-bar-600 rounded-lg py-2.5 px-4 text-bar-text focus:outline-none focus:border-bar-500 min-w-[180px]"
+          className="w-full md:w-auto bg-bar-900 md:bg-bar-800 border border-bar-600 md:border-bar-700 rounded-xl md:rounded-lg py-3.5 md:py-2.5 px-5 text-bar-text font-bold uppercase text-xs tracking-widest focus:outline-none focus:border-bar-500 outline-none"
         >
-          <option value="ALL">Todas las categorías</option>
+          <option value="ALL">TODAS LAS CATEGORÍAS</option>
           {allCategories.map(cat => (
-            <option key={cat} value={cat}>{cat}</option>
+            <option key={cat} value={cat}>{cat.toUpperCase()}</option>
           ))}
         </select>
       </div>
 
-      <div className="bg-bar-800 rounded-xl border border-bar-700 overflow-hidden shadow-xl">
-        <table className="w-full text-left">
-          <thead>
-            <tr className="bg-bar-950 text-slate-400 text-sm uppercase tracking-wider">
-              <th className="p-4">Nombre</th>
-              <th className="p-4">Categoría</th>
-              <th className="p-4 text-right">Costo (Interno)</th>
-              <th className="p-4 text-right">Venta (Público)</th>
-              <th className="p-4 text-right">Acciones</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-bar-700">
+      <div className="bg-bar-800 rounded-2xl border border-bar-700/50 overflow-hidden shadow-2xl">
+        {/* Mobile Grid View */}
+        <div className="md:hidden divide-y divide-bar-700/50">
             {filteredProducts.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="p-8 text-center text-slate-500">
-                  {searchTerm || categoryFilter !== 'ALL'
-                    ? 'No se encontraron productos con esos filtros.'
-                    : 'No hay productos registrados.'}
-                </td>
-              </tr>
+                <div className="p-10 text-center text-slate-500 font-bold uppercase tracking-widest text-xs">No hay productos registrados</div>
             ) : (
-              filteredProducts.map((p) => (
-                <tr key={p.id} className="hover:bg-bar-700/50 transition-colors">
-                  <td className="p-4 font-medium text-bar-text">{p.name}</td>
-                  <td className="p-4">
-                    <span className="inline-flex items-center gap-1 bg-bar-700/50 text-slate-300 px-2 py-1 rounded text-xs">
-                      <Tag size={12} />
-                      {p.category}
-                    </span>
-                  </td>
-                  <td className="p-4 text-right text-slate-300">${p.costPrice.toLocaleString()}</td>
-                  <td className="p-4 text-right text-emerald-400 font-medium">${p.salePrice.toLocaleString()}</td>
-                  <td className="p-4">
-                    <div className="flex justify-end gap-2">
-                      <button onClick={() => openModal(p)} className="p-2 hover:bg-bar-600 rounded-lg text-slate-300 hover:text-bar-text transition-colors" title="Editar">
-                        <Edit2 size={18} />
-                      </button>
-                      <button onClick={() => handleDelete(p.id)} className="p-2 hover:bg-rose-900/50 rounded-lg text-rose-400 hover:text-rose-200 transition-colors" title="Eliminar">
-                        <Trash2 size={18} />
-                      </button>
+                filteredProducts.map(p => (
+                    <div key={p.id} className="p-5 flex items-center justify-between group active:bg-bar-700/30 transition-colors">
+                        <div className="flex items-center gap-4">
+                            <div className="w-14 h-14 bg-bar-950 rounded-2xl flex items-center justify-center text-2xl border border-bar-700/50 shadow-inner">
+                                {p.image && p.image.length < 5 ? p.image : '📦'}
+                            </div>
+                            <div>
+                                <h4 className="text-lg font-black text-bar-text uppercase tracking-tighter leading-tight">{p.name}</h4>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 bg-bar-900 px-2 py-0.5 rounded-lg border border-bar-700/30">{p.category}</span>
+                                    <span className="text-sm font-black font-mono text-emerald-400">${p.salePrice.toLocaleString()}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={() => openModal(p)} className="p-3 bg-bar-900/50 text-slate-400 rounded-xl border border-bar-700/50">
+                                <Edit2 size={18} />
+                            </button>
+                            <button onClick={() => handleDelete(p.id)} className="p-3 bg-rose-950/20 text-rose-500 rounded-xl border border-rose-500/20">
+                                <Trash2 size={18} />
+                            </button>
+                        </div>
                     </div>
-                  </td>
-                </tr>
-              ))
+                ))
             )}
-          </tbody>
-        </table>
+        </div>
+
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-left">
+            <thead>
+                <tr className="bg-bar-950 text-slate-500 text-[10px] font-black uppercase tracking-widest">
+                <th className="p-5">Nombre del Producto</th>
+                <th className="p-5">Categoría</th>
+                <th className="p-5 text-right">Costo Interno</th>
+                <th className="p-5 text-right">Venta Público</th>
+                <th className="p-5 text-center">Acciones</th>
+                </tr>
+            </thead>
+            <tbody className="divide-y divide-bar-700/50">
+                {filteredProducts.map((p) => (
+                    <tr key={p.id} className="hover:bg-bar-700/20 transition-colors">
+                    <td className="p-5 font-black text-bar-text uppercase tracking-tight">{p.name}</td>
+                    <td className="p-5">
+                        <span className="inline-flex items-center gap-2 bg-bar-900 text-slate-400 font-bold px-3 py-1.5 rounded-xl text-[10px] uppercase tracking-widest border border-bar-700/50">
+                        <Tag size={12} className="text-bar-500" />
+                        {p.category}
+                        </span>
+                    </td>
+                    <td className="p-5 text-right text-slate-400 font-mono">${p.costPrice.toLocaleString()}</td>
+                    <td className="p-5 text-right text-emerald-400 font-black font-mono text-lg">${p.salePrice.toLocaleString()}</td>
+                    <td className="p-5">
+                        <div className="flex justify-center gap-2">
+                        <button onClick={() => openModal(p)} className="p-2.5 bg-bar-900/50 hover:bg-bar-700 text-slate-400 hover:text-bar-text rounded-xl transition-all" title="Editar">
+                            <Edit2 size={18} />
+                        </button>
+                        <button onClick={() => handleDelete(p.id)} className="p-2.5 bg-rose-950/30 hover:bg-rose-600 text-rose-400 hover:text-white rounded-xl transition-all" title="Eliminar">
+                            <Trash2 size={18} />
+                        </button>
+                        </div>
+                    </td>
+                    </tr>
+                ))}
+            </tbody>
+            </table>
+        </div>
       </div>
 
       {/* Summary */}
@@ -258,26 +283,28 @@ const Products: React.FC = () => {
 
       {/* Product Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-bar-800 rounded-2xl w-full max-w-md border border-bar-700 shadow-2xl">
-            <div className="p-6 border-b border-bar-700 flex justify-between items-center">
-              <h3 className="text-xl font-bold text-bar-text">{editingProduct ? 'Editar Producto' : 'Nuevo Producto'}</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-bar-text">
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-end md:items-center justify-center md:p-4 z-[100]">
+          <div className="bg-bar-800 w-full md:max-w-md h-[95vh] md:h-auto rounded-t-[3rem] md:rounded-3xl border-t md:border border-bar-600 shadow-2xl flex flex-col overflow-hidden">
+            <div className="p-8 md:p-6 border-b border-bar-700 flex justify-between items-center shrink-0">
+              <h3 className="text-2xl md:text-xl font-black text-bar-text uppercase tracking-tighter">{editingProduct ? 'Editar Producto' : 'Nuevo Producto'}</h3>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-bar-text bg-bar-900 p-2 rounded-xl">
                 <X size={24} />
               </button>
             </div>
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-8 md:p-6 space-y-6 no-scrollbar">
+              <div className="w-12 h-1.5 bg-bar-700 rounded-full mx-auto mb-6 md:hidden" />
+              
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Nombre</label>
-                <input required type="text" value={name} onChange={e => setName(e.target.value)} className="w-full bg-bar-900 border border-bar-600 rounded-lg p-2.5 text-bar-text focus:ring-1 focus:ring-bar-500 outline-none" placeholder="Ej. Cerveza Poker" />
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 ml-1">Nombre Comercial</label>
+                <input required type="text" value={name} onChange={e => setName(e.target.value)} className="w-full bg-bar-900 border border-bar-700 rounded-2xl p-4 text-bar-text font-bold text-lg focus:border-bar-500 outline-none transition-all shadow-inner" placeholder="Ej. Poker 330ml" />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Categoría</label>
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 ml-1">Clasificación / Categoría</label>
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className="w-full bg-bar-900 border border-bar-600 rounded-lg p-2.5 text-bar-text focus:ring-1 focus:ring-bar-500 outline-none"
+                  className="w-full bg-bar-900 border border-bar-700 rounded-2xl p-4 text-bar-text font-bold focus:border-bar-500 outline-none transition-all"
                 >
                   {allCategories.map(cat => (
                     <option key={cat} value={cat}>{cat}</option>
@@ -285,43 +312,44 @@ const Products: React.FC = () => {
                 </select>
               </div>
 
-
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Imagen / Emoticon (URL o Emoji)</label>
-                <input type="text" value={image} onChange={e => setImage(e.target.value)} className="w-full bg-bar-900 border border-bar-600 rounded-lg p-2.5 text-bar-text focus:ring-1 focus:ring-bar-500 outline-none" placeholder="Ej. 🍺 o https://..." />
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 ml-1">Icono o Emoji (Opcional)</label>
+                <input type="text" value={image} onChange={e => setImage(e.target.value)} className="w-full bg-bar-900 border border-bar-700 rounded-2xl p-4 text-bar-text font-bold text-2xl text-center focus:border-bar-500 outline-none transition-all" placeholder="🍺" />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Costo ($)</label>
-                  <input required type="number" min="0" value={costPrice} onChange={e => setCostPrice(e.target.value)} className="w-full bg-bar-900 border border-bar-600 rounded-lg p-2.5 text-bar-text focus:ring-1 focus:ring-bar-500 outline-none" />
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 ml-1">Costo Compra</label>
+                  <input required type="number" min="0" value={costPrice} onChange={e => setCostPrice(e.target.value)} className="w-full bg-bar-900 border border-bar-700 rounded-2xl p-4 text-bar-text font-mono text-xl font-black text-center focus:border-bar-500 outline-none" placeholder="0" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Venta ($)</label>
-                  <input required type="number" min="0" value={salePrice} onChange={e => setSalePrice(e.target.value)} className="w-full bg-bar-900 border border-bar-600 rounded-lg p-2.5 text-bar-text focus:ring-1 focus:ring-bar-500 outline-none" />
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 ml-1">Precio Venta</label>
+                  <input required type="number" min="0" value={salePrice} onChange={e => setSalePrice(e.target.value)} className="w-full bg-bar-900 border border-bar-700 rounded-2xl p-4 text-emerald-400 font-mono text-xl font-black text-center focus:border-bar-500 outline-none" placeholder="0" />
                 </div>
               </div>
 
               {costPrice && salePrice && (
-                <div className="p-3 bg-bar-900 rounded-lg border border-bar-600">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-400">Ganancia:</span>
-                    <span className="text-emerald-400 font-bold">${(Number(salePrice) - Number(costPrice)).toLocaleString()}</span>
+                <div className="p-6 bg-emerald-950/10 rounded-2xl border border-emerald-500/20 flex flex-col gap-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Utilidad Estimada:</span>
+                    <span className="text-xl font-black text-emerald-400 font-mono">${(Number(salePrice) - Number(costPrice)).toLocaleString()}</span>
                   </div>
-                  <div className="flex justify-between text-sm mt-1">
-                    <span className="text-slate-400">Margen:</span>
-                    <span className="text-bar-text font-bold">{Math.round(((Number(salePrice) - Number(costPrice)) / Number(costPrice)) * 100)}%</span>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Margen de Ganancia:</span>
+                    <span className="text-lg font-black text-bar-text font-mono">{Math.round(((Number(salePrice) - Number(costPrice)) / Number(costPrice)) * 100)}%</span>
                   </div>
                 </div>
               )}
 
-              <button type="submit" className="w-full bg-bar-500 hover:bg-bar-400 text-bar-950 font-bold py-3 rounded-lg mt-4 flex items-center justify-center gap-2">
-                <Check size={20} />
-                Guardar
-              </button>
+              <div className="pt-4">
+                <button type="submit" className="w-full bg-bar-500 hover:bg-bar-400 text-bar-950 font-black uppercase tracking-widest py-5 rounded-2xl shadow-xl shadow-bar-500/20 flex items-center justify-center gap-3 transition-all active:scale-95">
+                    <Check size={24} />
+                    Guardar Cambios
+                </button>
+              </div>
             </form>
           </div>
-        </div >
+        </div>
       )}
 
       {/* Category Management Modal */}

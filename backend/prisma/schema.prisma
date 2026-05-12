@@ -23,6 +23,7 @@ model User {
   closedSessions     ShiftSession[]      @relation("ClosedBy")
   openedSessions     ShiftSession[]      @relation("OpenedBy")
   workShifts         WorkShift[]
+  financialMovements FinancialMovement[] @relation("RegisteredMovements")
 }
 
 model Product {
@@ -83,6 +84,8 @@ model CreditTransaction {
   type          String
   paymentMethod String?
   observation   String
+  shiftSessionId         String?
+  originalShiftSessionId String?
   customer      CreditCustomer @relation(fields: [customerId], references: [id])
   employee      User           @relation(fields: [employeeId], references: [id])
 }
@@ -198,6 +201,44 @@ model AppConfig {
   cashDrawerEnabled Boolean @default(false)
   cashDrawerPort    String  @default("COM1")
   inventoryBase     Json?
+}
+
+model FinancialMovement {
+  id              String   @id @default(uuid())
+  type            String   // PRODUCTION (Ingreso) / PAYMENT (Egreso)
+  source          String   // CASH_DRAWER (Caja) / ADMIN_FUNDS (Administrador)
+  amount          Float
+  date            DateTime @default(now())
+  invoiceNumber   String?
+  description     String?  // Lo que se recibió u observaciones
+  status          String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  
+  employeeId      String
+  employeeName    String
+  sessionId       String?  // Relación opcional con la sesión de turno
+  
+  approvedById    String?
+  approvedAt      DateTime?
+  rejectionReason String?
+
+  // Correction Fields
+  correctionRequestedAmount Float?
+  correctionReason          String?
+  correctionStatus          String?   // PENDING, APPROVED, REJECTED
+  correctionRequestedAt     DateTime?
+  correctionApprovedById    String?
+  originalAmount            Float?
+
+  employee        User     @relation("RegisteredMovements", fields: [employeeId], references: [id])
+}
+
+model PayrollConfig {
+  id            String   @id @default(uuid())
+  weekdayRate   Float
+  weekendRate   Float
+  overnightRate Float
+  updatedAt     DateTime @updatedAt
+  updatedBy     String
 }
 
 enum Role {
